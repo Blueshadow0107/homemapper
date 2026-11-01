@@ -41,10 +41,14 @@ export class ThermalLbmSolver {
     this.solidTemperature = new Float64Array(this.n).fill(NaN);
     this.neighbours = new Int32Array(19 * this.n).fill(-1);
     this.steps = 0;
+    this.cellHeatCapacity = 1.2 * 1005 * grid.cell_m ** 3;
+    this.sourceEnergyJ = 0;
+    this.boundaryEnergyJ = 0;
 
     for (const source of grid.heater_sources || []) {
       this.source[source.index] += source.watts * this.heaterScale;
     }
+    this.totalSourceTemperature = this.source.reduce((total, value) => total + value, 0);
     for (let index = 0; index < this.n; index += 1) {
       if (grid.solid_temperature && Number.isFinite(grid.solid_temperature[index])) {
         this.solidTemperature[index] = grid.solid_temperature[index];
@@ -130,6 +134,7 @@ export class ThermalLbmSolver {
     const inverseTauFlow = 1 / this.tauFlow;
     const inverseTauTemperature = 1 / this.tauTemperature;
     for (let iteration = 0; iteration < count; iteration += 1) {
+      this.sourceEnergyJ += this.cellHeatCapacity * this.totalSourceTemperature;
       this.fNext.fill(0);
       this.gNext.fill(0);
       for (let index = 0; index < this.n; index += 1) {
@@ -169,9 +174,11 @@ export class ThermalLbmSolver {
           } else {
             const boundary = this.linkBoundaryTemperature[k * this.n + index];
             const coupling = this.linkBoundaryCoupling[k * this.n + index];
-            this.gNext[7 * index + FLOW_OPPOSITE[k]] = Number.isFinite(boundary)
+            const bounced = Number.isFinite(boundary)
               ? post + 2 * coupling * (TEMP_WEIGHTS[k] * boundary - post)
               : post;
+            this.gNext[7 * index + FLOW_OPPOSITE[k]] = bounced;
+            this.boundaryEnergyJ += this.cellHeatCapacity * (bounced - post);
           }
         }
       }
@@ -196,13 +203,16 @@ export class ThermalLbmSolver {
     let maxSpeed = 0;
     let minTemperature = Infinity;
     let maxTemperature = -Infinity;
+    let airTemperatureChange = 0;
     for (let index = 0; index < this.n; index += 1) {
       if (this.grid.cell_type[index] === 1) continue;
       const speed = Math.hypot(this.velocity[3 * index], this.velocity[3 * index + 1], this.velocity[3 * index + 2]);
       maxSpeed = Math.max(maxSpeed, speed);
       minTemperature = Math.min(minTemperature, this.temperature[index]);
       maxTemperature = Math.max(maxTemperature, this.temperature[index]);
+      airTemperatureChange += this.temperature[index] - this.initialTemp;
     }
+    const airEnergyChangeJ = this.cellHeatCapacity * airTemperatureChange;
     return {
       steps: this.steps,
       max_speed_lu: maxSpeed,
@@ -211,6 +221,11 @@ export class ThermalLbmSolver {
       viscosity_lu: (this.tauFlow - 0.5) / 3,
       thermal_diffusivity_lu: (this.tauTemperature - 0.5) / 4,
       velocity_scale_m_s_per_lu: this.velocityScale,
+      source_energy_j: this.sourceEnergyJ,
+      boundary_energy_j: this.boundaryEnergyJ,
+      wall_loss_energy_j: -this.boundaryEnergyJ,
+      air_energy_change_j: airEnergyChangeJ,
+      energy_residual_j: this.sourceEnergyJ + this.boundaryEnergyJ - airEnergyChangeJ,
     };
   }
 

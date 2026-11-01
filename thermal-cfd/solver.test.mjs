@@ -61,6 +61,10 @@ test('heater watts add energy and drive buoyant motion', () => {
   grid.heater_sources = [{ index, watts: 1000 }];
   const solver = new ThermalLbmSolver(grid, { initial_temp_c: 0.5, reference_temp_c: 0.5 });
   solver.step(5);
-  assert.ok(solver.stats().max_temperature_c > 0.5);
-  assert.ok(solver.stats().max_speed_lu > 0);
+  const stats = solver.stats();
+  assert.ok(stats.max_temperature_c > 0.5);
+  assert.ok(stats.max_speed_lu > 0);
+  assert.ok(stats.source_energy_j > 0);
+  assert.ok(stats.air_energy_change_j > 0);
+  assert.ok(Math.abs(stats.energy_residual_j) < 1e-6);
 });
