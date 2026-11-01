@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8" /><title>Furniture catalog</title>
+<style>html,body{margin:0;background:#f4f2fa;font:12px sans-serif}canvas{display:block}</style></head>
+<body><script type="module">
+import * as THREE from 'three';
+import catalog from '../assets/furniture/catalog.json';
+import { buildFurniture } from '../src/furniture.js';
+const W = innerWidth, H = innerHeight;
+const r = new THREE.WebGLRenderer({ antialias: true });
+r.setSize(W, H); r.shadowMap.enabled = true; r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.append(r.domElement);
+const s = new THREE.Scene(); s.background = new THREE.Color('#f4f2fa');
+s.add(new THREE.HemisphereLight('#fff', '#c5bdd8', 2.2));
+const k = new THREE.DirectionalLight('#fff', 2.6); k.position.set(-4, 9, 6); k.castShadow = true; k.shadow.mapSize.set(2048, 2048);
+Object.assign(k.shadow.camera, { left: -10, right: 10, top: 6, bottom: -6, near: 1, far: 30 }); s.add(k);
+const cols = 6, gap = 3.0, rows = Math.ceil(catalog.items.length / cols);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(cols * gap + 2, rows * gap + 2), new THREE.MeshStandardMaterial({ color: '#b9b0d4' }));
+floor.rotation.x = -Math.PI / 2; floor.position.set((cols - 1) * gap / 2, -0.001, (rows - 1) * gap / 2); floor.receiveShadow = true; s.add(floor);
+catalog.items.forEach((it, i) => {
+  const g = buildFurniture(it);
+  g.position.set((i % cols) * gap, 0, Math.floor(i / cols) * gap);
+  g.rotation.y = -0.5;
+  s.add(g);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 48; const x = c.getContext('2d');
+  x.fillStyle = 'rgba(34,26,52,.88)'; x.beginPath(); x.roundRect(2, 2, 252, 44, 10); x.fill(); x.fillStyle = '#fff'; x.font = '600 22px sans-serif'; x.textAlign = 'center'; x.fillText(it.name, 128, 31);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false })); sp.scale.set(1.6, 0.3, 1);
+  sp.position.set(g.position.x, 0.02, g.position.z + 1.25); s.add(sp);
+});
+const cam = new THREE.PerspectiveCamera(32, W / H, 0.1, 100);
+cam.position.set((cols - 1) * gap / 2, 15, (rows - 1) * gap / 2 + 10); cam.lookAt((cols - 1) * gap / 2, 0.3, (rows - 1) * gap / 2 + 0.2);
+r.render(s, cam);
+</script></body></html>
