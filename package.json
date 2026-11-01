@@ -1,0 +1,20 @@
+{
+  "name": "home-comfort-twin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "draft-server": "node server/index.js",
+    "draft-server:mock": "DRAFT_MOCK=1 node server/index.js",
+    "test": "node test/plan-ops.test.mjs && node test/draft.test.mjs && node test/cfd-fixture.test.mjs"
+  },
+  "dependencies": {
+    "three": "^0.181.0"
+  },
+  "devDependencies": {
+    "vite": "^7.1.12"
+  }
+}
