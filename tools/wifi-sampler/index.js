@@ -1,3 +1,5 @@
+import { frequencyDetails } from './bands.js';
+
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:5175/sample';
 
 function normalizeReading(reading) {
@@ -6,7 +8,7 @@ function normalizeReading(reading) {
   }
   return {
     rssi_dbm: reading.rssi_dbm,
-    ...(Number.isFinite(reading.frequency_hz) ? { frequency_hz: reading.frequency_hz } : {}),
+    ...frequencyDetails(reading.frequency_hz),
     source: 'iw',
   };
 }

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { frequencyDetails } from './bands.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -13,14 +14,14 @@ async function iw(...args) {
   }
 }
 
-function parseLink(output) {
+export function parseLink(output) {
   if (!output.includes('Connected to')) return null;
   const signal = output.match(/signal:\s*(-?\d+(?:\.\d+)?)\s*dBm/);
   if (!signal) return null;
   const frequency = output.match(/^\s*freq:\s*(\d+(?:\.\d+)?)\s*$/m);
   return {
     rssi_dbm: Number(signal[1]),
-    ...(frequency ? { frequency_hz: Math.round(Number(frequency[1]) * 1e6) } : {}),
+    ...(frequency ? frequencyDetails(Math.round(Number(frequency[1]) * 1e6)) : {}),
     source: 'iw',
   };
 }
