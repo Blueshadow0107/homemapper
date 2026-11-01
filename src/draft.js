@@ -23,7 +23,7 @@ function cluster1d(values, tol) {
   return (v) => map.get(v);
 }
 
-export function draftToFloorplan(raw, { imgW, imgH, name = 'Uploaded plan' } = {}) {
+export function draftToFloorplan(raw, { imgW, imgH, name = 'Uploaded plan', widthHintM = null } = {}) {
   const warnings = [];
   const num = (v) => (Number.isFinite(v) ? v : null);
   const P = (p) => (num(p?.x) !== null && num(p?.y) !== null ? [Math.min(1000, Math.max(0, p.x)), Math.min(1000, Math.max(0, p.y))] : null);
@@ -51,7 +51,10 @@ export function draftToFloorplan(raw, { imgW, imgH, name = 'Uploaded plan' } = {
   const widthPx = pxX(maxX) - pxX(minX);
   const heightPx = pxY(maxY) - pxY(minY);
   let mPerPx;
-  if (num(raw.printed_overall_width_m) > 0 && widthPx > 0) {
+  if (num(widthHintM) > 0 && widthPx > 0) {
+    mPerPx = widthHintM / widthPx;
+    warnings.push(`Scale set from the width you entered (${(+widthHintM).toFixed(2)} m) — it is applied to the overall extent the model drew, so check a wall.`);
+  } else if (num(raw.printed_overall_width_m) > 0 && widthPx > 0) {
     mPerPx = raw.printed_overall_width_m / widthPx;
     warnings.push(`Scale taken from a printed width of ${raw.printed_overall_width_m} m — verify it.`);
   } else {
@@ -104,8 +107,26 @@ export function draftToFloorplan(raw, { imgW, imgH, name = 'Uploaded plan' } = {
     });
   }
   if (added) warnings.push(`Added ${added} wall(s) along room edges the model did not draw — check them.`);
+
+  // ---- completeness: structural validity says nothing about whether the drawing was fully read
+  const modelWalls = walls1.length;
+  const area = (r) => Math.abs(r.polygon.reduce((a, p, j) => { const q = r.polygon[(j + 1) % r.polygon.length]; return a + (p[0] * q[1] - q[0] * p[1]); }, 0) / 2);
+  const roomArea = fp.rooms.reduce((a, r) => a + area(r), 0);
+  const bboxArea = (Math.max(...fp.rooms.flatMap((r) => r.polygon.map((p) => p[0]))) - Math.min(...fp.rooms.flatMap((r) => r.polygon.map((p) => p[0])))) * (Math.max(...fp.rooms.flatMap((r) => r.polygon.map((p) => p[1]))) - Math.min(...fp.rooms.flatMap((r) => r.polygon.map((p) => p[1]))));
+  const coverage = bboxArea > 0 ? roomArea / bboxArea : 0;
+  const addedShare = added / Math.max(1, fp.walls.length);
+  const omitted = (Array.isArray(raw.omitted_or_uncertain) ? raw.omitted_or_uncertain : []).map((t) => String(t).slice(0, 160)).slice(0, 8);
+  let strikes = 0;
+  if (Number(raw.plan_count) > 1) { strikes++; warnings.push(`The image shows ${raw.plan_count} plans; only one was extracted. Crop the plan you want and upload again for a better read.`); }
+  if (addedShare > 0.3) { strikes += addedShare > 0.5 ? 3 : 2; warnings.push(`INCOMPLETE? The model drew only ${modelWalls} walls; ${added} of ${fp.walls.length} walls were filled in automatically from room outlines.`); }
+  if (coverage < 0.7) { strikes++; warnings.push(`Rooms cover only ${Math.round(coverage * 100)}% of the footprint — some rooms or spaces are probably missing.`); }
+  for (const o of omitted) { strikes++; warnings.push(`Model says: ${o}`); }
   if (raw.notes) warnings.push(`Model notes: ${String(raw.notes).slice(0, 300)}`);
+  if (/\b(missing|incomplete|partial|limited|unclear|not extracted|omitted|hard to|tricky|difficult)\b/i.test(String(raw.notes ?? ''))) strikes++; // the model hedged: believe it
+  const quality = strikes >= 2 ? 'poor' : strikes >= 1 ? 'review' : 'ok';
+  fp.draft.quality = quality;
+  warnings.unshift(quality === 'poor' ? 'LOOKS INCOMPLETE — expect to add rooms/walls by hand, or crop to one plan and retry.' : quality === 'review' ? 'Check for missing rooms/walls before trusting this.' : 'No obvious gaps detected — still verify corners, names and scale.');
 
   const underlay = { x: r2(-pxX(minX) * mPerPx), y: r2(-pxY(minY) * mPerPx), w: imgW * mPerPx, h: imgH * mPerPx };
-  return { floorplan: fp, underlay, warnings };
+  return { floorplan: fp, underlay, warnings, quality };
 }

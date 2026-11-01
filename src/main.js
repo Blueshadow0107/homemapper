@@ -1,6 +1,7 @@
 import demoPlan from '../data/demo-floorplan.json';
 import { createEditor } from './editor.js';
 import { draftToFloorplan } from './draft.js';
+import { openUploadDialog } from './upload-dialog.js';
 import { simulate } from '../thermal-model/index.js';
 import { createCfdLayer } from './cfd/layer.js';
 import { startCfd } from './cfd/client.js';
@@ -30,6 +31,9 @@ function renderRooms() {
   );
   $('#room-count').textContent = String(floorplan.rooms.length).padStart(2, '0');
   $('.panel-heading h2').textContent = floorplan.name ?? 'Plan';
+  const draft = floorplan.draft && floorplan.draft.reviewed !== true;
+  $('#draft-chip').hidden = !draft;
+  $('#draft-chip').textContent = draft ? `AI draft · unverified${floorplan.draft.quality === 'poor' ? ' · looks incomplete' : ''}` : '';
   $('#scene-status').textContent = `${floorplan.name ?? 'Plan'} · ${floorplan.rooms.length} rooms · ${floorplan.walls.length} walls`;
 }
 renderRooms();
@@ -333,22 +337,18 @@ let raf = 0;
 async function uploadPlan(file) {
   const bust = (items, level = 'error') => editor.setBanner({ level, items });
   try {
+    const pick = await openUploadDialog(file); // crop to one plan + optional real width
+    if (!pick) return;
+    if (pick.error) return bust([pick.error]);
     bust(['Reading your plan… (a few seconds)'], 'info');
-    const bmp = await createImageBitmap(file);
-    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
-    const cv = document.createElement('canvas');
-    cv.width = Math.round(bmp.width * k);
-    cv.height = Math.round(bmp.height * k);
-    cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
-    const image = cv.toDataURL('image/jpeg', 0.85);
-    const res = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image }) });
+    const res = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: pick.image }) });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `server returned ${res.status}`);
-    const { floorplan: fp, underlay, warnings } = draftToFloorplan(body, { imgW: cv.width, imgH: cv.height, name: file.name.replace(/\.[^.]+$/, '') });
-    editor.loadDraft(fp, { ...underlay, href: image }, warnings);
+    const { floorplan: fp, underlay, warnings, quality } = draftToFloorplan(body, { imgW: pick.width, imgH: pick.height, name: file.name.replace(/\.[^.]+$/, ''), widthHintM: pick.widthHintM });
+    editor.loadDraft(fp, { ...underlay, href: pick.image }, warnings, quality);
   } catch (err) {
     const noServer = /Failed to fetch|NetworkError|returned 50[24]/.test(err.message);
-    bust([`Upload failed: ${err.message}`, ...(noServer ? ['Is the draft server running? Start it from a terminal that has OPENAI_API_KEY: node server/index.js'] : [])]);
+    bust([`Upload failed: ${err.message}`, ...(noServer ? ['Is the draft server running? Start it from a terminal that has OPENAI_API_KEY: npm run draft-server'] : [])]);
   }
 }
 const editor = createEditor({

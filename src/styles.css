@@ -167,3 +167,21 @@ button { font: inherit; }
 .ed-furn-label { font: 0.2px sans-serif; fill: #3a3350; text-anchor: middle; pointer-events: none; }
 .ed-group .icon-button { font-size: 10px; }
 .ed-furn-hit { cursor: move; }
+
+/* Upload dialog + draft chip */
+.ud-overlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; background: rgba(14, 12, 28, 0.62); }
+.ud-box { width: min(700px, 94vw); max-height: 94vh; display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 16px; background: #fbfaff; color: #3a3350; font-size: 12px; }
+.ud-title { font-size: 15px; font-weight: 700; }
+.ud-hint { margin: 0; color: #6a6480; }
+.ud-canvas { align-self: center; max-width: 100%; border: 1px solid #ddd8ea; border-radius: 10px; cursor: crosshair; touch-action: none; background: #fff; }
+.ud-row { display: flex; flex-direction: column; gap: 4px; }
+.ud-row label { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.ud-row input { width: 92px; padding: 5px 7px; border: 1px solid #d3cde4; border-radius: 8px; }
+.ud-row select { padding: 5px; border: 1px solid #d3cde4; border-radius: 8px; }
+.ud-row small { color: #8a84a0; }
+.ud-actions { display: flex; gap: 8px; }
+.ud-spacer { flex: 1; }
+.ud-box .primary { background: #7a4dff; border-color: #7a4dff; color: #fff; }
+#draft-chip { display: inline-block; margin-top: 6px; margin-left: 0; }
+#draft-chip[hidden] { display: none; }
+.ed-banner .icon-button { align-self: flex-start; margin-top: 4px; }

@@ -35,3 +35,48 @@ assert.ok(w3.some((w) => w.startsWith('Added')));
 // nothing usable -> clear error
 assert.throws(() => draftToFloorplan({ rooms: [], walls: [] }, { imgW: 10, imgH: 10 }), /No rooms/);
 console.log('draft: all passed');
+
+// ---- completeness scoring + user-supplied width
+const sq2 = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+const W2 = (ax, ay, bx, by, exterior) => ({ a: { x: ax, y: ay }, b: { x: bx, y: by }, exterior });
+const good = { rooms: [{ name: 'A', polygon: sq2(100, 100, 500, 500) }, { name: 'B', polygon: sq2(500, 100, 900, 500) }],
+  walls: [W2(100, 100, 900, 100, true), W2(900, 100, 900, 500, true), W2(900, 500, 100, 500, true), W2(100, 500, 100, 100, true), W2(500, 100, 500, 500, false)],
+  printed_overall_width_m: null, plan_count: 1, omitted_or_uncertain: [], notes: '' };
+const ok = draftToFloorplan(good, { imgW: 800, imgH: 400 });
+assert.equal(ok.quality, 'ok');
+assert.equal(ok.floorplan.draft.reviewed, false);
+assert.equal(ok.floorplan.draft.quality, 'ok');
+assert.ok(ok.warnings[0].startsWith('No obvious gaps'));
+
+// user's width beats a printed width and the guess; scale is exact for the overall extent
+const hint = draftToFloorplan({ ...good, printed_overall_width_m: 99 }, { imgW: 800, imgH: 400, widthHintM: 9 });
+assert.equal(Math.max(...hint.floorplan.rooms.flatMap((r) => r.polygon.map((p) => p[0]))), 9);
+assert.ok(hint.warnings.some((w) => w.includes('width you entered')));
+
+// model drew almost no walls -> the converter filled them in -> flagged INCOMPLETE
+const thin = draftToFloorplan({ ...good, walls: [W2(100, 100, 900, 100, true)] }, { imgW: 800, imgH: 400 });
+assert.equal(thin.quality, 'poor');
+assert.ok(thin.warnings[0].startsWith('LOOKS INCOMPLETE'));
+assert.ok(thin.warnings.some((w) => w.startsWith('INCOMPLETE?')));
+
+// several plans / omissions / low room coverage each raise the flag
+const multi = draftToFloorplan({ ...good, plan_count: 2, omitted_or_uncertain: ['small washroom not extracted'] }, { imgW: 800, imgH: 400 });
+assert.equal(multi.quality, 'poor'); // two independent warning signs
+assert.ok(multi.warnings.some((w) => w.includes('shows 2 plans')));
+const many = draftToFloorplan({ ...good, plan_count: 2, omitted_or_uncertain: ['small washroom not extracted', 'balcony unclear'] }, { imgW: 800, imgH: 400 });
+assert.equal(many.quality, 'poor');
+assert.ok(multi.warnings.some((w) => w.includes('washroom')));
+const sparse = draftToFloorplan({ rooms: [{ name: 'A', polygon: sq2(100, 100, 300, 300) }, { name: 'B', polygon: sq2(700, 700, 900, 900) }], walls: [W2(100, 100, 300, 100, true), W2(300, 100, 300, 300, true), W2(300, 300, 100, 300, true), W2(100, 300, 100, 100, true), W2(700, 700, 900, 700, true), W2(900, 700, 900, 900, true), W2(900, 900, 700, 900, true), W2(700, 900, 700, 700, true)], printed_overall_width_m: null, plan_count: 1, omitted_or_uncertain: [], notes: '' }, { imgW: 800, imgH: 800 });
+assert.ok(sparse.warnings.some((w) => w.includes('cover only')));
+assert.notEqual(sparse.quality, 'ok');
+console.log('draft quality: passed');
+
+// the model's own hedging counts against a draft
+const lone = draftToFloorplan({ ...good, plan_count: 2 }, { imgW: 800, imgH: 400 });
+assert.equal(lone.quality, 'review'); // a single sign only asks for a check
+const hedge = draftToFloorplan({ ...good, notes: 'Limited details and some missing or unclear areas.' }, { imgW: 800, imgH: 400 });
+assert.equal(hedge.quality, 'review');
+const hedgeCover = draftToFloorplan({ ...sparseRaw(), notes: 'Limited details and some missing or unclear areas.' }, { imgW: 800, imgH: 800 });
+assert.equal(hedgeCover.quality, 'poor');
+function sparseRaw() { return { rooms: [{ name: 'A', polygon: sq2(100, 100, 300, 300) }, { name: 'B', polygon: sq2(700, 700, 900, 900) }], walls: [W2(100, 100, 300, 100, true), W2(300, 100, 300, 300, true), W2(300, 300, 100, 300, true), W2(100, 300, 100, 100, true), W2(700, 700, 900, 700, true), W2(900, 700, 900, 900, true), W2(900, 900, 700, 900, true), W2(700, 900, 700, 700, true)], printed_overall_width_m: null, plan_count: 1, omitted_or_uncertain: [] }; }
+console.log('draft hedging: passed');

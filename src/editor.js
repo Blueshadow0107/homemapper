@@ -189,7 +189,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   function renderSide() {
     const issues = ops.validate(fp);
     let html = '';
-    if (banner) html += `<div class="ed-banner ${banner.level}">${banner.items.map((t) => `<div>${esc(t)}</div>`).join('')}</div>`;
+    if (banner) html += `<div class="ed-banner ${banner.level}">${banner.items.map((t) => `<div>${esc(t)}</div>`).join('')}${banner.checkable && fp.draft?.reviewed === false ? '<button data-act="reviewed" class="icon-button">I have checked it</button>' : ''}</div>`;
     if (underlay) html += `<label class="ed-toggle"><input type="checkbox" data-f="underlay" ${showUnderlay ? 'checked' : ''} /> show source image</label>`;
     html += `<div class="ed-hint">${toolHint[tool]}</div>`;
     if (tool === 'furniture') {
@@ -252,6 +252,10 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   });
   side.addEventListener('click', (e) => {
     const a = e.target.dataset.act;
+    if (a === 'reviewed' && fp.draft) {
+      banner = null;
+      return commit({ ...fp, draft: { ...fp.draft, reviewed: true } });
+    }
     if (a === 'rot' && sel?.kind === 'furniture') return rotateSel();
     if (a === 'fdel' && sel?.kind === 'furniture') return del();
     if (a !== 'scale' || sel?.kind !== 'wall') return;
@@ -303,12 +307,12 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     renderSide();
   }
   /** Land an AI draft: becomes the current plan (undoable), shown over its source image, with a to-check list. */
-  function loadDraft(next, under, warnings) {
+  function loadDraft(next, under, warnings, quality = 'review') {
     history.push(fp);
     fp = normalizePlan(next);
     sel = null;
     underlay = under;
-    banner = { level: 'warn', items: ['AI DRAFT — not verified.', ...warnings] };
+    banner = { level: quality === 'ok' ? 'warn' : 'error', items: ['AI DRAFT — not verified.', ...warnings], checkable: true };
     fit();
     onChange(fp, { refit: true, draft: true });
     render();

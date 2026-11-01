@@ -15,7 +15,7 @@ const pt = { type: 'object', additionalProperties: false, required: ['x', 'y'], 
 export const SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['rooms', 'walls', 'printed_overall_width_m', 'notes'],
+  required: ['rooms', 'walls', 'printed_overall_width_m', 'plan_count', 'omitted_or_uncertain', 'notes'],
   properties: {
     rooms: {
       type: 'array',
@@ -26,16 +26,20 @@ export const SCHEMA = {
       items: { type: 'object', additionalProperties: false, required: ['a', 'b', 'exterior'], properties: { a: pt, b: pt, exterior: { type: 'boolean' } } },
     },
     printed_overall_width_m: { type: ['number', 'null'] },
+    plan_count: { type: 'integer' },
+    omitted_or_uncertain: { type: 'array', items: { type: 'string' } },
     notes: { type: 'string' },
   },
 };
 
 const PROMPT = `You are reading an architectural floorplan image of ONE storey. Extract geometry only.
 Coordinates: normalized 0-1000 on BOTH axes relative to the image (x=0 left, x=1000 right, y=0 top, y=1000 bottom).
-- rooms: one entry per enclosed room, name from its label (or "Room N"), polygon corners in order (rectilinear plans: 4+ corners).
-- walls: straight wall centre-line segments. Shared corners must use IDENTICAL coordinates. Mark exterior=true for the outer envelope. Do not draw doors/windows as walls; skip furniture, text and dimension lines.
-- printed_overall_width_m: the overall building width in metres ONLY if a dimension is printed on the plan; otherwise null. Never guess.
-- notes: anything uncertain (blurry area, curved wall, missing room).`;
+- plan_count: how many separate floorplans (including alternative layouts or other storeys) appear in the image. If more than 1, extract ONLY the largest / most complete one, and say which in notes. Ignore elevations, sections, title blocks, legends and text.
+- rooms: EVERY enclosed room, including bathrooms, toilets, closets, laundry, store rooms and circulation spaces: do not skip small ones and do not merge neighbours that have their own walls. Name from its printed label (or "Room N"). Polygon corners in order; rectilinear plans: 4+ corners. An open-plan zone without walls between its parts is one room.
+- walls: straight wall centre-line segments. Shared corners must use IDENTICAL coordinates. Mark exterior=true for the outer envelope. Do not draw doors/windows as walls; skip furniture, text and dimension lines. Every room edge should be covered by a wall segment.
+- printed_overall_width_m: the overall building width in METRES only if a dimension for it is printed (convert feet-inches: 1 ft = 0.3048 m, 1 in = 0.0254 m); otherwise null. Never guess.
+- omitted_or_uncertain: short strings naming anything you left out, merged, or are unsure of (e.g. "small washroom bottom-right not extracted", "balcony outline unclear"). Empty list only if you are confident the extraction is complete.
+- notes: anything else the user should know.`;
 
 function cannedDraft() {
   const sq = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
@@ -49,6 +53,8 @@ function cannedDraft() {
     ],
     walls: [W(100, 100, 900, 100, true), W(900, 100, 900, 900, true), W(900, 900, 100, 900, true), W(100, 900, 100, 100, true), W(100, 500, 900, 500, false), W(600, 100, 600, 500, false), W(500, 500, 500, 900, false)],
     printed_overall_width_m: null,
+    plan_count: 1,
+    omitted_or_uncertain: [],
     notes: 'MOCK extraction (DRAFT_MOCK=1) - not read from your image.',
   };
 }

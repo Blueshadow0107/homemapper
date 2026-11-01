@@ -83,7 +83,7 @@ export function normalizePlan(raw) {
     openings,
     furniture,
   };
-  if (raw.draft && typeof raw.draft === 'object') plan.draft = { source: str(raw.draft.source, 20, 'unknown'), reviewed: raw.draft.reviewed === true };
+  if (raw.draft && typeof raw.draft === 'object') plan.draft = { source: str(raw.draft.source, 20, 'unknown'), reviewed: raw.draft.reviewed === true, ...(['ok', 'review', 'poor'].includes(raw.draft.quality) ? { quality: raw.draft.quality } : {}) };
   if (raw.materials && typeof raw.materials === 'object' && !Array.isArray(raw.materials)) {
     plan.materials = {};
     for (const [k, v] of Object.entries(raw.materials).slice(0, 32)) {
