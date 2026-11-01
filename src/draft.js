@@ -44,6 +44,14 @@ export function draftToFloorplan(raw, { imgW, imgH, name = 'Uploaded plan', widt
   const walls0 = (raw.walls ?? []).map((w) => ({ a: P(w.a), b: P(w.b), ext: Boolean(w.exterior) })).filter((w) => w.a && w.b);
   if (!rooms0.length) throw new Error('No rooms found in the image — try a clearer plan or draw it in the editor.');
 
+  // slanted wall segments on an otherwise rectilinear plan are model noise (room edges re-create the real walls in step 5)
+  const wallsAll = walls0.length;
+  const slanted = (w) => { const dx = Math.abs(w.a[0] - w.b[0]); const dy = Math.abs(w.a[1] - w.b[1]); return Math.min(dx, dy) > 0.12 * Math.max(dx, dy) && Math.min(dx, dy) > 12; };
+  const rectilinear = walls0.filter((w) => !slanted(w)).length >= 0.8 * wallsAll;
+  const walls0k = rectilinear ? walls0.filter((w) => !slanted(w)) : walls0;
+  if (walls0k.length < wallsAll) warnings.push(`Dropped ${wallsAll - walls0k.length} slanted wall segment(s) on a rectilinear plan.`);
+  walls0.length = 0; walls0.push(...walls0k);
+
   // 1. snap near-equal coordinates together so rectilinear plans close up exactly
   const allPts = [...rooms0.flatMap((r) => r.pts), ...walls0.flatMap((w) => [w.a, w.b])];
   const sx = cluster1d(allPts.map((p) => p[0]), 12);
