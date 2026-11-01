@@ -189,3 +189,4 @@ button { font: inherit; }
 .ed-hint-box { fill: #f5b94222; stroke: #d98a00; stroke-width: 0.06; stroke-dasharray: 0.2 0.12; pointer-events: none; }
 .ed-hint-label { font: 0.24px sans-serif; fill: #8a5a00; text-anchor: middle; pointer-events: none; font-weight: 700; }
 .ed-banner button[disabled] { opacity: 0.6; }
+.cfd-caveat { margin: 0 0 8px; padding: 6px 8px; border-radius: 8px; background: #3a2a14; color: #ffd9a0 !important; font-size: 9px; line-height: 1.45; }
