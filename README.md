@@ -56,6 +56,8 @@ The sampler runs on `127.0.0.1:5175` and uses the Linux `iw` tool on a connected
 
 ### Demo video
 
+Watch it on YouTube: https://youtu.be/VfGzSliJAfk
+
 [`video/demo.mp4`](video/demo.mp4) is an 83-second, open-captioned walkthrough (no voiceover) that uses one synthetic plan throughout: AI draft of an image, 2D review, then Wi-Fi, Heating and Airflow in 3D.
 
 ### Rebuilding the demo video (optional)

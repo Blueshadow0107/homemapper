@@ -2,6 +2,8 @@
 
 ## Demo video
 
+YouTube: https://youtu.be/VfGzSliJAfk
+
 [`video/demo.mp4`](../video/demo.mp4) — 83 s, open captions, no voiceover; one synthetic plan from upload to analysis.
 
 ## One-liner
