@@ -86,7 +86,7 @@ Runtime dependencies are only `three`; `vite` is a dev dependency. Everything el
 - **Furniture and room assets are generated, not downloaded.** `assets/furniture/generate.mjs` builds every piece procedurally from boxes, cylinders and spheres into `assets/furniture/catalog.json`. There are no external meshes, textures, icons or images in the repo. `preview/furniture.html` is a viewer for that catalog.
 - The demo floorplan is hand-written schematic data.
 
-**How it was built:** during a one-day hackathon (2026-11-02) by a person working with AI coding agents (Claude, Kimi and Codex). The agents wrote and reviewed much of the code; design and physics decisions were made by the person. The agent hand-off log is not part of this repo.
+**How it was built:** during a one-day hackathon (2026-11-01) by a person working with AI coding agents (Claude, Kimi and Codex). The agents wrote and reviewed much of the code; design and physics decisions were made by the person. The agent hand-off log is not part of this repo.
 
 ## Data, privacy and what stays out of Git
 
