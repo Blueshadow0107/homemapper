@@ -115,7 +115,8 @@ const scenes = {
     pause(); // real extraction takes ~80 s on gpt-5.5; cut it
     for (let i = 0; i < 300; i++) { await sleep(1000); const b = await ev("[...document.querySelectorAll('.ed-banner div')].map(d=>d.textContent).join('|')"); if (b && !b.startsWith('Reading')) break; }
     resume(); await sleep(2500);
-    await moveTo(800, 560, 900); await sleep(1500);
+    await moveTo(800, 560, 900); await sleep(1200);
+    await clickText('I have checked it', 800); await sleep(1500); // the human review step the app requires
     return endClip();
   },
   async inspect() { // 0:19-0:31 Looks right -> 3D, orbit
@@ -123,7 +124,7 @@ const scenes = {
     await startClip('3-inspect');
     await sleep(800);
     await clickSel('[data-act=to3d]', 900); await sleep(1200);
-    await drag(1000, 650, 1300, 600, 2400); await sleep(1200);
+    await drag(380, 430, 600, 380, 2400); await sleep(1200); // inside the 3D canvas (x 17-941, y 80-700 at 1280x720)
     await moveTo(...await center('#plan-sub'), 800); await sleep(1200);
     return endClip();
   },
@@ -159,10 +160,12 @@ const scenes = {
     await moveTo(...await center('#cfd-caveat'), 800); await sleep(2000);
     return endClip();
   },
-  async outro() { // 1:14-1:24 full 3D view
-    await load(); await ev("document.querySelector('#layer-wifi').click()"); await sleep(600);
+  async outro() { // 1:14-1:24 end on an interior view: cutaway walls, slow orbit, Wi-Fi field visible
+    await load(); await ev("document.querySelector('#layer-wifi').click()"); await sleep(400);
+    await clickSel('#walls-toggle', 600); await sleep(500);
     await startClip('7-outro');
-    await drag(900, 700, 1100, 640, 2600); await sleep(2200);
+    await sleep(800);
+    await drag(380, 440, 580, 400, 2600); await sleep(2400);
     return endClip();
   },
 };

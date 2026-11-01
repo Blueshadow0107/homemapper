@@ -31,3 +31,7 @@ Show one practical journey: review a floorplan in 2D, inspect it in 3D, then use
 - Heating is an approximate room-level model, not a calibrated building-energy prediction.
 - Airflow is qualitative and is not energy-equivalent to Heating.
 - The hackathon event page lists submissions closing at 17:00 and final demos at 18:00; it does not publish judging criteria.
+
+## Captions-only cut
+
+`video/assemble.mjs` builds a voiceless version of this script (open captions, 83 s) from clips recorded by `video/capture.mjs`; the voiceover table above remains the script for a narrated take.

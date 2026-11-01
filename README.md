@@ -52,6 +52,17 @@ The sampler runs on `127.0.0.1:5175` and uses the Linux `iw` tool on a connected
    - **Heating** — *Add radiator* then click a wall; scrub the time slider; *Scenario settings* has outside temperature and default radiator power.
    - **Airflow** — *Run* simulates the same radiators in 3D; scrub time and slice height.
 
+### Rebuilding the demo video (optional)
+
+With `npm run dev` on port 5174 (or `APP=...`) and, for the upload shot, the draft server running:
+
+```sh
+node video/capture.mjs      # headless Brave/Chromium drives the app, writes one clip per scene to video/out/
+node video/assemble.mjs     # open-captioned, voiceless MP4 -> video/out/home-comfort-twin-demo.mp4 (under 90 s)
+```
+
+Needs ffmpeg and a Chromium-based browser named `brave-browser` on PATH. The upload shot uses the generated synthetic plan, never a real one.
+
 ## Repository layout
 
 | Path | What |
@@ -65,7 +76,7 @@ The sampler runs on `127.0.0.1:5175` and uses the Linux `iw` tool on a connected
 | `assets/furniture/` | Furniture catalog and its generator |
 | `data/` | Bundled schematic floorplan |
 | `docs/` | [Product brief](docs/product-brief.md), [architecture](docs/architecture.md), [data contract](docs/data-contract.md) |
-| `video/` | Scripts that capture the demo video (outputs are git-ignored) |
+| `video/` | Scripts that capture and assemble the demo video (`capture.mjs`, `make-plan.mjs`, `assemble.mjs`; outputs are git-ignored) |
 | `test/` | Node tests; the model folders carry their own `*.test.mjs` |
 
 ## Built with, and what is original
