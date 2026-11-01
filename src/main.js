@@ -35,6 +35,16 @@ function renderRooms() {
   $('#draft-chip').hidden = !draft;
   $('#draft-chip').textContent = draft ? `AI draft · unverified${floorplan.draft.quality === 'poor' ? ' · looks incomplete' : ''}` : '';
   $('#scene-status').textContent = `${floorplan.name ?? 'Plan'} · ${floorplan.rooms.length} rooms · ${floorplan.walls.length} walls`;
+  $('#plan-sub').textContent = `${floorplan.rooms.length} rooms · ${floorplan.walls.length} walls · ${floorplan.ceiling_height_m ?? 2.7} m ceilings`;
+  $('#side-footer').textContent = floorplan.name === demoPlan.name ? 'Demo plan. Use "2D plan" to upload your own floorplan image or draw one.' : '';
+  updateDraftStrip();
+}
+// Unverified AI drafts must be impossible to miss in the 3D view too, with one click back to the review step.
+let planTab = false;
+function updateDraftStrip() {
+  const draft = floorplan.draft && floorplan.draft.reviewed !== true;
+  $('#draft-strip').hidden = !draft || planTab;
+  if (draft) $('#draft-strip-text').textContent = `AI draft, not verified${floorplan.draft.quality === 'poor' ? ' and looks incomplete' : ''}. Every result here is only as good as this plan.`;
 }
 renderRooms();
 
@@ -79,7 +89,7 @@ function setMode(next) {
   hint.innerHTML =
     mode === 'router' ? 'Click the floor to put the router there.'
     : mode === 'mark' ? 'Click where you took a reading, then capture or type it.'
-    : 'Heatmap = <b>predicted</b> signal from the router (distance + walls). Pins = real readings you took to check it.';
+    : 'Move the router to see how coverage changes. Add a reading to compare the estimate with reality at one spot.';
 }
 $('#router-toggle').addEventListener('click', () => setMode('router'));
 $('#tx-power').addEventListener('change', (e) => {
@@ -224,8 +234,8 @@ function drawHeat() {
     })
     .join('');
   $('#heat-hint').textContent = heatersOf(floorplan).length
-    ? 'Estimate: lumped room model (conduction, infiltration, constant heater power). No solar, airflow or thermostat.'
-    : 'No heaters yet: rooms just cool toward the outside temperature. Press Add heater and click near a wall: a radiator is placed there.';
+    ? 'Drag the time slider. Estimate from a lumped room model (conduction, infiltration, constant radiator power).'
+    : 'No radiators yet, so rooms just cool toward the outside temperature. Press Add radiator, then click near a wall.';
 }
 
 function setLayer(next) {
@@ -371,6 +381,7 @@ const editor = createEditor({
   },
   onUploadImage: uploadPlan,
   onReviewDraft: reviewDraft,
+  onDone: () => showTab(false),
   onChange: (fp, { refit, scaleFactor, draft } = {}) => {
     floorplan = fp;
     if (draft) {
@@ -400,6 +411,10 @@ const editor = createEditor({
   },
 });
 function showTab(plan) {
+  planTab = plan;
+  updateDraftStrip();
+  $('#side-panel').classList.toggle('plan-mode', plan); // analysis layers only make sense on the checked plan, in 3D
+  $('#plan-mode-note').hidden = !plan;
   $('#editor').hidden = !plan;
   $('#tab-plan').classList.toggle('active', plan);
   $('#tab-3d').classList.toggle('active', !plan);
@@ -412,5 +427,6 @@ function showTab(plan) {
 }
 $('#tab-3d').addEventListener('click', () => showTab(false));
 $('#tab-plan').addEventListener('click', () => showTab(true));
+$('#strip-review').addEventListener('click', () => showTab(true));
 if (location.hash === '#plan') showTab(true);
 window.twin = { viewer, router, samples, refresh, editor };

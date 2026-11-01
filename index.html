@@ -17,56 +17,54 @@
       </header>
 
       <div class="workspace">
-        <section class="scene-panel" aria-label="3D floorplan preview">
+        <section class="scene-panel" aria-label="Floorplan: 2D plan and 3D view">
           <div id="scene" class="scene"></div>
           <div id="editor" class="editor" hidden></div>
-          <div class="scene-tabs" role="tablist">
-            <button id="tab-3d" class="icon-button active" role="tab" type="button">3D view</button>
-            <button id="tab-plan" class="icon-button" role="tab" type="button">Edit plan</button>
+
+          <nav class="scene-tabs" role="tablist" aria-label="Inspect the plan">
+            <button id="tab-plan" class="icon-button" role="tab" type="button" title="Review and edit the floorplan in 2D"><b>1</b> 2D plan <small>review &amp; edit</small></button>
+            <button id="tab-3d" class="icon-button active" role="tab" type="button" title="Inspect the plan in 3D with the analysis layers"><b>2</b> 3D view <small>inspect &amp; analyse</small></button>
+          </nav>
+
+          <div id="draft-strip" class="draft-strip" hidden>
+            <span id="draft-strip-text">AI draft, not verified.</span>
+            <button id="strip-review" class="icon-button" type="button">Review in 2D plan</button>
           </div>
-          <div class="scene-overlay scene-overlay-top">
-            <div class="eyebrow">3D BUILDING SHELL</div>
-            <h1>See how the space works.</h1>
-          </div>
+
           <div class="scene-overlay scene-overlay-bottom">
             <span id="scene-status">Loading floorplan…</span>
             <div class="view-controls">
-              <button id="top-view" class="icon-button" type="button" title="Top view">Top view</button>
+              <button id="walls-toggle" class="icon-button" type="button" title="Lower the walls so the inside is visible">Cutaway walls</button>
+              <button id="top-view" class="icon-button" type="button" title="Look straight down">Top view</button>
               <button id="reset-view" class="icon-button" type="button" title="Reset camera">Reset view</button>
             </div>
           </div>
         </section>
 
-        <aside class="side-panel">
+        <aside id="side-panel" class="side-panel">
           <div class="panel-heading">
-            <div class="eyebrow">PROJECT</div>
             <h2>Hackathon venue</h2>
             <span id="draft-chip" class="pill pill-warn" hidden></span>
-            <p>Schematic starter plan · single floor</p>
+            <p id="plan-sub"></p>
           </div>
 
-          <div class="layer-tabs" role="tablist">
+          <p id="plan-mode-note" class="plan-note" hidden>You are editing the plan. Wi-Fi, Heating and Airflow open in the <b>3D view</b> once the plan looks right.</p>
+
+          <div class="layer-tabs" role="tablist" aria-label="Analysis layer">
             <button id="layer-wifi" class="icon-button active" role="tab" type="button">Wi-Fi</button>
             <button id="layer-heat" class="icon-button" role="tab" type="button">Heating</button>
             <button id="layer-cfd" class="icon-button" role="tab" type="button">Airflow</button>
           </div>
 
           <section class="info-card wifi-card" id="wifi-card">
-            <div class="card-icon wifi-icon" aria-hidden="true">⌁</div>
             <div class="wifi-body">
-              <div class="card-title">Wi-Fi field</div>
-              <p id="wifi-hint"></p>
+              <div class="card-title">Wi-Fi signal <span class="pill pill-claim">Estimated</span></div>
+              <p class="claim">Model estimate from the router's position, distance and walls. Not a survey.</p>
               <div class="wifi-actions">
-                <button id="router-toggle" class="icon-button" type="button">Move router</button>
-                <button id="mark-toggle" class="icon-button" type="button">Check a spot</button>
-                <button id="walls-toggle" class="icon-button" type="button">Cutaway</button>
+                <button id="router-toggle" class="icon-button" type="button" title="Click the floor to put the router there">Place router</button>
+                <button id="mark-toggle" class="icon-button" type="button" title="Compare the estimate with a real reading at one spot">Add a reading</button>
               </div>
-              <label class="band-row">Router band
-                <select id="router-band" aria-label="router band"><option value="2.4e9">2.4 GHz</option><option value="5.64e9">5 GHz</option></select>
-              </label>
-              <label class="band-row">Tx power dBm
-                <input id="tx-power" type="number" step="1" min="0" max="30" placeholder="model default (17)" aria-label="router transmit power" />
-              </label>
+              <p id="wifi-hint" class="action-hint"></p>
               <form id="reading-form" class="reading-form" hidden>
                 <span id="pending-pos" class="pill pill-muted"></span>
                 <button id="capture-btn" class="icon-button primary" type="button">Capture &amp; save</button>
@@ -77,58 +75,73 @@
               <div class="legend" aria-label="signal legend">
                 <span id="legend-lo">-90</span><i class="legend-bar"></i><span id="legend-hi">-40 dBm</span>
               </div>
-              <p class="legend-note"><b>▦</b> heatmap = <i>predicted</i> from the router · <b>●</b> pins = real readings you took</p>
-              <ul id="sample-list" class="sample-list"></ul>
-              <span id="wifi-count" class="pill pill-muted">0 checks</span>
+              <p class="legend-note">Colours = estimated signal. Pins = your real readings, shown only as spot checks.</p>
+              <details class="more">
+                <summary>Readings <span id="wifi-count" class="pill pill-muted">0 checks</span></summary>
+                <ul id="sample-list" class="sample-list"></ul>
+              </details>
+              <details class="more">
+                <summary>Model settings</summary>
+                <label class="band-row">Router band
+                  <select id="router-band" aria-label="router band"><option value="2.4e9">2.4 GHz</option><option value="5.64e9">5 GHz</option></select>
+                </label>
+                <label class="band-row">Tx power dBm
+                  <input id="tx-power" type="number" step="1" min="0" max="30" placeholder="model default (17)" aria-label="router transmit power" />
+                </label>
+              </details>
             </div>
           </section>
 
           <section class="info-card heat-card" id="heat-card" hidden>
-            <div class="card-icon heat-icon" aria-hidden="true">◌</div>
             <div class="wifi-body">
-              <div class="card-title">Heating</div>
-              <p id="heat-hint">Place heaters, then watch each room warm up. Estimate only: no solar, airflow or thermostat.</p>
+              <div class="card-title">Heating <span class="pill pill-claim pill-claim-strong">Quantitative estimate</span></div>
+              <p class="claim">Room-by-room temperatures over 3 hours from the radiators you place. Lumped model: no sun, wind or thermostat.</p>
               <div class="wifi-actions">
-                <button id="heater-toggle" class="icon-button" type="button">Add heater</button>
-                <button id="heater-clear" class="icon-button" type="button">Clear</button>
+                <button id="heater-toggle" class="icon-button" type="button" title="Click near a wall to mount a radiator there">Add radiator</button>
+                <button id="heater-clear" class="icon-button" type="button" title="Remove every radiator">Remove all</button>
               </div>
-              <div class="heat-fields">
-                <label>Outside °C <input id="outside-temp" type="number" step="1" value="8" /></label>
-                <label>Heater W <input id="heater-watts" type="number" step="100" min="100" max="5000" value="1500" /></label>
-              </div>
+              <p id="heat-hint" class="action-hint"></p>
               <label class="time-row">Time <input id="time-slider" type="range" min="0" max="0" value="0" /> <span id="time-label">0 min</span></label>
               <div class="legend" aria-label="temperature legend"><span>6°</span><i class="legend-bar heat-bar"></i><span>24 °C</span></div>
               <ul id="heat-list" class="sample-list"></ul>
+              <details class="more">
+                <summary>Scenario settings</summary>
+                <div class="heat-fields">
+                  <label>Outside °C <input id="outside-temp" type="number" step="1" value="8" /></label>
+                  <label>New radiator W <input id="heater-watts" type="number" step="100" min="100" max="5000" value="1500" /></label>
+                </div>
+              </details>
             </div>
           </section>
 
           <section class="info-card cfd-card" id="cfd-card" hidden>
-            <div class="card-icon heat-icon" aria-hidden="true">≋</div>
             <div class="wifi-body">
-              <div class="card-title">Airflow <span id="cfd-source" class="pill pill-warn">—</span></div>
-              <p id="cfd-hint">Uses the radiators from the Heating tab. Run to see how warm air rises and circulates.</p>
-              <p id="cfd-caveat" class="cfd-caveat">Qualitative airflow view: the solver is uncalibrated and its temperatures are <b>not</b> energy-equivalent to the Heating tab. Use it for where air moves, not for how warm rooms get.</p>
+              <div class="card-title">Airflow <span class="pill pill-claim pill-claim-warn">Qualitative</span> <span id="cfd-source" class="pill pill-warn"></span></div>
+              <p class="claim">Shows where warm air tends to move, from the radiators in the Heating tab. Its temperatures are <b>not</b> comparable to Heating.</p>
               <div class="wifi-actions">
                 <button id="cfd-run" class="icon-button" type="button">Run airflow</button>
                 <button id="cfd-cancel" class="icon-button" type="button" hidden>Cancel</button>
-                <label class="toggle-inline"><input id="cfd-arrows" type="checkbox" checked /> arrows</label>
               </div>
+              <p id="cfd-hint" class="action-hint">Uses the radiators from the Heating tab.</p>
               <progress id="cfd-progress" max="1" value="0" hidden></progress>
               <label class="time-row">Time <input id="cfd-time" type="range" min="0" max="0" value="0" /> <span id="cfd-time-label">—</span></label>
               <label class="time-row">Height <input id="cfd-height" type="range" min="0.1" max="2.6" step="0.1" value="0.9" /> <span id="cfd-height-label">0.9 m</span></label>
               <div class="legend"><span>cooler</span><i class="legend-bar heat-bar"></i><span>warmer</span></div>
               <p id="cfd-readout" class="legend-note"></p>
+              <p id="cfd-caveat" class="cfd-caveat">Uncalibrated solver: use it for airflow direction, not for how warm rooms get.</p>
+              <details class="more">
+                <summary>Display</summary>
+                <label class="toggle-inline"><input id="cfd-arrows" type="checkbox" checked /> show flow arrows</label>
+              </details>
             </div>
           </section>
 
-          <section class="rooms-section">
-            <div class="section-label">ROOMS <span id="room-count">—</span></div>
+          <details class="more rooms-section">
+            <summary>Rooms <span id="room-count" class="pill pill-muted">—</span></summary>
             <ul id="room-list" class="room-list"></ul>
-          </section>
+          </details>
 
-          <footer class="side-footer">
-            Demo geometry only. Add the real venue plan before collecting venue readings.
-          </footer>
+          <footer id="side-footer" class="side-footer"></footer>
         </aside>
       </div>
     </main>

@@ -23,7 +23,7 @@ const h = (html) => {
  * 2D plan editor. Owns an SVG + toolbar inside `root`; reports every committed or in-progress edit via
  * onChange(fp, {refit?, scaleFactor?}). The plan itself stays plain JSON (docs/data-contract.md).
  */
-export function createEditor({ root, plan, onChange, getRouter, onRouterMove, onUploadImage, onReviewDraft }) {
+export function createEditor({ root, plan, onChange, getRouter, onRouterMove, onUploadImage, onReviewDraft, onDone }) {
   let fp = plan;
   const history = [];
   let tool = 'select'; // select | wall | room | router
@@ -54,8 +54,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     </div>
     <div class="ed-group">
       <button data-act="upload" class="icon-button primary">Upload plan image</button>
-      <button data-act="import" class="icon-button">Import JSON</button>
-      <button data-act="export" class="icon-button">Export JSON</button>
+      <details class="ed-file"><summary class="icon-button">File ▾</summary><div class="ed-file-menu"><button data-act="import" class="icon-button">Import plan JSON</button><button data-act="export" class="icon-button">Export plan JSON</button></div></details>
       <input type="file" accept="application/json,.json" hidden data-kind="json" />
       <input type="file" accept="image/png,image/jpeg,image/webp" hidden data-kind="image" />
     </div>
@@ -223,6 +222,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       html += `<div class="ed-card"><b>Plan</b><label>Ceiling height (m) <input data-f="ceiling" type="number" step="0.1" min="2" max="6" value="${Number.isFinite(+fp.ceiling_height_m) ? +fp.ceiling_height_m : 2.7}" /></label></div>`;
     }
     html += `<div class="ed-issues">${issues.length ? issues.map((i) => `<div class="ed-issue ${i.level}">⚠ ${esc(i.msg)}</div>`).join('') : '<div class="ed-ok">✓ plan looks consistent</div>'}</div>`;
+    if (onDone) html += `<button data-act="to3d" class="icon-button primary ed-next" type="button">Looks right: inspect in 3D →</button>`;
     side.innerHTML = html;
   }
 
@@ -257,6 +257,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   });
   side.addEventListener('click', async (e) => {
     const a = e.target.dataset.act;
+    if (a === 'to3d') return onDone?.();
     if (a === 'dismiss-hints') {
       hints = null;
       return render();
