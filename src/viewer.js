@@ -264,17 +264,12 @@ export function createViewer({ mount, floorplan: initial }) {
     applyHeat();
   }
   function setHeaters(list = []) {
+    // The radiator itself is furniture (drawn with the shell); here only the wattage tag floats above it.
     heaterGroup.clear();
     for (const hh of list) {
-      const m = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.16, 0.16, 0.5, 20),
-        new THREE.MeshStandardMaterial({ color: '#e8693c', emissive: '#e8693c', emissiveIntensity: 0.5 }),
-      );
-      m.position.copy(toWorld(hh.position_m, 0.25));
-      m.castShadow = true;
       const lab = labelSprite(`${hh.watts} W`, '#e8693c');
-      lab.position.copy(toWorld(hh.position_m, 0.85));
-      heaterGroup.add(m, lab);
+      lab.position.copy(toWorld(hh.position_m, 1.0));
+      heaterGroup.add(lab);
     }
   }
 

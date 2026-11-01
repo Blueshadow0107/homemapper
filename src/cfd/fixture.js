@@ -50,11 +50,21 @@ export function buildGrid(fp, cell_m, heaters = [], obstacles = []) {
         for (let iy = 0; iy < Math.min(ny, top); iy++) cell_type[(iy * nz + iz) * nx + ix] = 1;
       }
   for (const h of heaters) {
-    const ix = Math.floor((h.position_m[0] - x0) / cell_m);
-    const iz = Math.floor((h.position_m[1] - z0) / cell_m);
+    // A wall-mounted radiator sits flush against a wall, so its own cell may be wall: use the nearest AIR cell instead.
+    const ix0 = Math.floor((h.position_m[0] - x0) / cell_m);
+    const iz0 = Math.floor((h.position_m[1] - z0) / cell_m);
     const iy = Math.min(ny - 1, Math.floor((h.height_m ?? 0.3) / cell_m)); // default 0.3 m, per Kimi
-    const idx = (iy * nz + iz) * nx + ix;
-    if (ix >= 0 && ix < nx && iz >= 0 && iz < nz && cell_type[idx] === 0) cell_type[idx] = 2; // 2 = AIR cell with a source, not solid
+    let best = null;
+    for (let dz = -2; dz <= 2; dz++)
+      for (let dx = -2; dx <= 2; dx++) {
+        const ix = ix0 + dx;
+        const iz = iz0 + dz;
+        if (ix < 0 || ix >= nx || iz < 0 || iz >= nz) continue;
+        if (cell_type[(iy * nz + iz) * nx + ix] !== 0) continue;
+        const d = dx * dx + dz * dz;
+        if (!best || d < best.d) best = { d, idx: (iy * nz + iz) * nx + ix };
+      }
+    if (best) cell_type[best.idx] = 2; // 2 = AIR cell with a source, not solid
   }
   return { origin_m: [x0, z0], cell_m, nx, nz, ny, height_m, cell_type };
 }

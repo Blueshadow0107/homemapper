@@ -168,7 +168,10 @@ setMode(null);
 refresh();
 
 // ---- heating layer (Kimi's thermal-model/simulate; viewer only draws what it returns)
-const heaters = []; // {id, position_m, watts}; room_id is re-derived from the plan on every run
+// Heaters ARE radiator furniture in the plan (one object, saved with the plan, undoable). Derived here, never stored twice.
+const HEAT_TYPES = new Set(catalog.items.filter((i) => i.heat_source).map((i) => i.id));
+const heatersOf = (fp) => (fp.furniture ?? []).filter((f) => HEAT_TYPES.has(f.type)).map((f) => ({ id: f.id, position_m: f.position_m, watts: Number.isFinite(+f.watts) ? +f.watts : 1500 }));
+let jumpToEnd = false; // after the first heater appears, show the result instead of t=0
 let layer = 'wifi';
 let thermal = null;
 const timeSlider = $('#time-slider');
@@ -181,7 +184,7 @@ const roomAt = (fp, [x, z]) =>
   });
 
 function runThermal() {
-  const live = heaters.filter((h) => roomAt(floorplan, h.position_m));
+  const live = heatersOf(floorplan).filter((h) => roomAt(floorplan, h.position_m));
   const scenario = {
     outside_temp_c: Number($('#outside-temp').value) || 0,
     initial_temp_c: 16,
@@ -197,6 +200,10 @@ function runThermal() {
   }
   viewer.setHeaters(live);
   timeSlider.max = thermal ? thermal.times_s.length - 1 : 0;
+  if (jumpToEnd && live.length) {
+    timeSlider.value = timeSlider.max;
+    jumpToEnd = false;
+  }
   drawHeat();
 }
 
@@ -212,9 +219,9 @@ function drawHeat() {
       return `<li><span>${name.replace(/[<>&"']/g, '')}</span><span>${r.temps_c[i].toFixed(1)}°C${r.heater_energy_kwh ? ` · ${(r.heater_energy_kwh * (thermal.times_s[i] / thermal.times_s.at(-1))).toFixed(2)} kWh so far` : ''}</span></li>`;
     })
     .join('');
-  $('#heat-hint').textContent = heaters.length
+  $('#heat-hint').textContent = heatersOf(floorplan).length
     ? 'Estimate: lumped room model (conduction, infiltration, constant heater power). No solar, airflow or thermostat.'
-    : 'No heaters yet: rooms just cool toward the outside temperature. Press Add heater, then click a room.';
+    : 'No heaters yet: rooms just cool toward the outside temperature. Press Add heater and click near a wall: a radiator is placed there.';
 }
 
 function setLayer(next) {
@@ -265,7 +272,7 @@ $('#cfd-run').addEventListener('click', async () => {
   $('#cfd-cancel').hidden = false;
   $('#cfd-progress').hidden = false;
   $('#cfd-progress').value = 0;
-  const live = heaters.filter((h) => roomAt(floorplan, h.position_m));
+  const live = heatersOf(floorplan).filter((h) => roomAt(floorplan, h.position_m));
   if (!live.length) $('#cfd-hint').textContent = 'No heaters placed (Heating tab) — running with none, so air will stay still.';
   else $('#cfd-hint').textContent = 'Running…';
   try {
@@ -312,17 +319,10 @@ $('#heater-toggle').addEventListener('click', () => {
   $('#heater-toggle').classList.toggle('active', on);
   viewer.setPickMode(on ? 'heater' : null);
 });
-$('#heater-clear').addEventListener('click', () => {
-  heaters.length = 0;
-  runThermal();
-});
+$('#heater-clear').addEventListener('click', () => editor.removeFurnitureWhere((f, item) => item?.heat_source));
 viewer.el.addEventListener('twin:heater', (e) => {
-  heaters.push({ id: `heater-${heaters.length + 1}`, position_m: e.detail.position_m, watts: Number($('#heater-watts').value) || 1500 });
-  runThermal();
-  if (Number(timeSlider.value) === 0) {
-    timeSlider.value = timeSlider.max; // show the result, not t=0
-    drawHeat();
-  }
+  jumpToEnd = true;
+  editor.placeFurniture('radiator', e.detail.position_m, { watts: Math.min(5000, Math.max(50, Number($('#heater-watts').value) || 1500)) });
 });
 timeSlider.addEventListener('input', drawHeat);
 $('#outside-temp').addEventListener('change', () => layer === 'heat' && runThermal());
@@ -365,14 +365,12 @@ const editor = createEditor({
     if (draft) {
       // fresh plan: old spot checks no longer mean anything; put the router mid-way in the largest room
       samples.length = 0;
-      heaters.length = 0;
       const area = (r) => Math.abs(r.polygon.reduce((a, p, j) => { const q = r.polygon[(j + 1) % r.polygon.length]; return a + p[0] * q[1] - q[0] * p[1]; }, 0));
       const big = [...fp.rooms].sort((a, b) => area(b) - area(a))[0];
       router.position_m = [+(big.polygon.reduce((a, p) => a + p[0], 0) / big.polygon.length).toFixed(2), +(big.polygon.reduce((a, p) => a + p[1], 0) / big.polygon.length).toFixed(2)];
     }
     if (scaleFactor) {
       router.position_m = router.position_m.map((v) => +(v * scaleFactor).toFixed(3));
-      for (const h of heaters) h.position_m = h.position_m.map((v) => +(v * scaleFactor).toFixed(3));
       for (const s of samples) s.position_m = s.position_m.map((v) => +(v * scaleFactor).toFixed(3));
     }
     viewer.setFloorplan(fp, { refit });

@@ -70,7 +70,7 @@ export function normalizePlan(raw) {
     let id = typeof f.id === 'string' && ID.test(f.id) ? f.id : `furn-${i + 1}`;
     while (usedF.has(id)) id += '_';
     usedF.add(id);
-    return { id, type: f.type, position_m: point(f.position_m, `furniture ${i + 1}`), rotation_deg: ((Math.round(num(f.rotation_deg, -3600, 3600, 0) / 90) * 90) % 360 + 360) % 360 };
+    return { id, type: f.type, position_m: point(f.position_m, `furniture ${i + 1}`), rotation_deg: ((Math.round(num(f.rotation_deg, -3600, 3600, 0) / 90) * 90) % 360 + 360) % 360, ...(f.watts !== undefined ? { watts: num(f.watts, 50, 5000, 1500) } : {}) };
   });
 
   const plan = {

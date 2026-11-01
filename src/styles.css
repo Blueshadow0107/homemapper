@@ -166,3 +166,4 @@ button { font: inherit; }
 .ed-furn-front { stroke: #4b4560; stroke-width: 0.05; stroke-linecap: round; pointer-events: none; }
 .ed-furn-label { font: 0.2px sans-serif; fill: #3a3350; text-anchor: middle; pointer-events: none; }
 .ed-group .icon-button { font-size: 10px; }
+.ed-furn-hit { cursor: move; }

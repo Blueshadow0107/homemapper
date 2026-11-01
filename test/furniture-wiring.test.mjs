@@ -51,3 +51,28 @@ assert.equal(g.cell_type[idx(4, 2, 2)], 1);               // inside wardrobe at 
 assert.equal(g.cell_type[idx(4, 2, g.ny - 1)], 0);        // above the 2.0 m top = air
 assert.equal(g.cell_type[idx(6.5, 2, 2)], 0);             // elsewhere unchanged
 console.log('furniture-wiring: all passed');
+
+// ---- radiator == heater: wall snapping + source survives the wall
+const radiator = catalog.items.find((i) => i.id === 'radiator');
+// click near the north wall (z=0) from inside the main hall -> flush to the wall, facing +z (into the room)
+const n1 = ops.snapToWall(demo, radiator, [3, 0.4]);
+assert.equal(n1.rotation_deg, 0);
+assert.ok(n1.position_m[1] > 0.08 && n1.position_m[1] < 0.2, `radiator should hug the wall, got z=${n1.position_m[1]}`);
+assert.equal(n1.position_m[0], 3);
+// east wall (x=8) from inside -> faces -x = 90°
+const n2 = ops.snapToWall(demo, radiator, [7.6, 2]);
+assert.equal(n2.rotation_deg, 90);
+assert.ok(n2.position_m[0] < 8 && n2.position_m[0] > 7.8);
+// west wall (x=0) -> faces +x = 270°;  south wall (z=8) -> faces -z = 180°
+assert.equal(ops.snapToWall(demo, radiator, [0.4, 6]).rotation_deg, 270);
+assert.equal(ops.snapToWall(demo, radiator, [2, 7.6]).rotation_deg, 180);
+// far from every wall: unchanged
+assert.deepEqual(ops.snapToWall({ ...demo, walls: [demo.walls[0]] }, radiator, [4, 7]), { position_m: [4, 7], rotation_deg: 0 });
+// watts survive the schema; junk watts clamp
+assert.equal(normalizePlan({ ...demo, furniture: [{ type: 'radiator', position_m: [1, 1], watts: 99999 }] }).furniture[0].watts, 5000);
+assert.equal(normalizePlan({ ...demo, furniture: [{ type: 'radiator', position_m: [1, 1], watts: 'x' }] }).furniture[0].watts, 1500);
+assert.equal(normalizePlan({ ...demo, furniture: [{ type: 'sofa', position_m: [1, 1] }] }).furniture[0].watts, undefined);
+// the snapped radiator's heat source still lands in an air cell even though it hugs the wall
+const gr = buildGrid(demo, 0.25, [{ position_m: n1.position_m, watts: 1500, height_m: 0.3 }], []);
+assert.equal(gr.cell_type.filter((c) => c === 2).length, 1);
+console.log('radiator-as-heater: passed');

@@ -133,12 +133,12 @@ export function bounds(fp) {
 }
 
 // ---- furniture (catalog ids live in assets/furniture/catalog.json; types are validated at render time)
-export function addFurniture(fp, type, position_m, rotation_deg = 0) {
+export function addFurniture(fp, type, position_m, rotation_deg = 0, extra = {}) {
   const out = clone(fp);
   out.furniture ??= [];
   let n = out.furniture.length + 1;
   while (out.furniture.some((f) => f.id === `furn-${n}`)) n++;
-  out.furniture.push({ id: `furn-${n}`, type, position_m: [...position_m], rotation_deg });
+  out.furniture.push({ id: `furn-${n}`, type, position_m: [...position_m], rotation_deg, ...extra });
   return out;
 }
 export function moveFurniture(fp, i, position_m) {
@@ -155,4 +155,37 @@ export function deleteFurniture(fp, i) {
   const out = clone(fp);
   out.furniture.splice(i, 1);
   return out;
+}
+export function updateFurniture(fp, i, patch) {
+  const out = clone(fp);
+  Object.assign(out.furniture[i], patch);
+  return out;
+}
+
+/**
+ * Wall-mounted pieces (radiators): snap `p` to the nearest wall within maxDist, back against the wall, facing into the
+ * room on the side `p` was on. Returns {position_m, rotation_deg}; unchanged (rotation 0) when no wall is near.
+ * Front of a piece is local +z at rotation 0; clockwise-on-plan rotations send it to -x (90), -z (180), +x (270).
+ */
+export function snapToWall(fp, item, p, maxDist = 1.2) {
+  let best = null;
+  for (const w of fp.walls) {
+    const dx = w.b[0] - w.a[0];
+    const dz = w.b[1] - w.a[1];
+    const l2 = dx * dx + dz * dz;
+    if (l2 < 1e-9) continue;
+    const t = Math.max(0, Math.min(1, ((p[0] - w.a[0]) * dx + (p[1] - w.a[1]) * dz) / l2));
+    const q = [w.a[0] + t * dx, w.a[1] + t * dz];
+    const d = Math.hypot(p[0] - q[0], p[1] - q[1]);
+    if (!best || d < best.d) best = { w, q, d, dx, dz };
+  }
+  if (!best || best.d > maxDist) return { position_m: [...p], rotation_deg: 0 };
+  const nl = Math.hypot(best.dx, best.dz);
+  let nx = -best.dz / nl;
+  let nz = best.dx / nl;
+  if ((p[0] - best.q[0]) * nx + (p[1] - best.q[1]) * nz < 0) [nx, nz] = [-nx, -nz];
+  const fronts = [[0, 0, 1], [90, -1, 0], [180, 0, -1], [270, 1, 0]];
+  const rot = fronts.reduce((a, f) => (f[1] * nx + f[2] * nz > a[1] * nx + a[2] * nz ? f : a))[0];
+  const off = best.w.thickness_m / 2 + item.size_m[2] / 2 + 0.01;
+  return { position_m: [+(best.q[0] + nx * off).toFixed(3), +(best.q[1] + nz * off).toFixed(3)], rotation_deg: rot };
 }

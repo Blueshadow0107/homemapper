@@ -129,19 +129,6 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       t.textContent = r.name;
     });
 
-    (fp.furniture ?? []).forEach((f, i) => {
-      const item = ITEMS.get(f.type);
-      if (!item) return;
-      const [w, , d] = item.size_m;
-      const isSel = sel?.kind === 'furniture' && sel.i === i;
-      const g = el('g', { transform: `translate(${f.position_m[0]} ${f.position_m[1]}) rotate(${f.rotation_deg || 0})` }, svg);
-      const r = el('rect', { x: -w / 2, y: -d / 2, width: w, height: d, rx: 0.05, fill: CAT_COLOR[item.category] || '#ccc', class: 'ed-furn' + (isSel ? ' sel' : '') }, g);
-      r.dataset.furn = i;
-      el('line', { x1: -w / 2 + 0.06, y1: d / 2 - 0.05, x2: w / 2 - 0.06, y2: d / 2 - 0.05, class: 'ed-furn-front' }, g); // front edge (+z at rotation 0)
-      const t = el('text', { x: f.position_m[0], y: f.position_m[1] + 0.08, class: 'ed-furn-label' }, svg);
-      t.textContent = item.name;
-    });
-
     fp.walls.forEach((w, i) => {
       const isSel = sel?.kind === 'wall' && sel.i === i;
       const line = el('line', {
@@ -157,6 +144,22 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
         const t = el('text', { x: (w.a[0] + w.b[0]) / 2, y: (w.a[1] + w.b[1]) / 2 - 0.2, class: 'ed-dim' }, svg);
         t.textContent = `${ops.wallLength(w).toFixed(2)} m`;
       }
+    });
+
+    (fp.furniture ?? []).forEach((f, i) => {
+      const item = ITEMS.get(f.type);
+      if (!item) return;
+      const [w, , d] = item.size_m;
+      const isSel = sel?.kind === 'furniture' && sel.i === i;
+      const g = el('g', { transform: `translate(${f.position_m[0]} ${f.position_m[1]}) rotate(${f.rotation_deg || 0})` }, svg);
+      const r = el('rect', { x: -w / 2, y: -d / 2, width: w, height: d, rx: 0.05, fill: CAT_COLOR[item.category] || '#ccc', class: 'ed-furn' + (isSel ? ' sel' : '') }, g);
+      r.dataset.furn = i;
+      // thin pieces (radiators hug walls) need a generous invisible hit target, and furniture is drawn above walls
+      const hit = el('rect', { x: -Math.max(w, 0.45) / 2, y: -Math.max(d, 0.45) / 2, width: Math.max(w, 0.45), height: Math.max(d, 0.45), fill: 'transparent', class: 'ed-furn-hit' }, g);
+      hit.dataset.furn = i;
+      el('line', { x1: -w / 2 + 0.06, y1: d / 2 - 0.05, x2: w / 2 - 0.06, y2: d / 2 - 0.05, class: 'ed-furn-front' }, g); // front edge (+z at rotation 0)
+      const t = el('text', { x: f.position_m[0], y: f.position_m[1] + 0.08, class: 'ed-furn-label' }, svg);
+      t.textContent = item.name;
     });
 
     if (tool === 'select' || tool === 'wall') {
@@ -192,13 +195,14 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     if (tool === 'furniture') {
       const cats = [...new Set(catalog.items.map((i) => i.category))];
       html += `<div class="ed-card"><b>Place</b><label>Piece <select data-f="ftype">${cats.map((c) => `<optgroup label="${esc(c)}">${catalog.items.filter((i) => i.category === c).map((i) => `<option value="${esc(i.id)}" ${i.id === furnType ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}</optgroup>`).join('')}</select></label>
-        <small>${ITEMS.get(furnType)?.solid ? 'Solid: blocks airflow in the Airflow tab.' : 'Open/low: does not block airflow.'}</small></div>`;
+        <small>${ITEMS.get(furnType)?.heat_source ? 'Heater: snaps to the nearest wall, facing into the room.' : ITEMS.get(furnType)?.solid ? 'Solid: blocks airflow in the Airflow tab.' : 'Open/low: does not block airflow.'}</small></div>`;
     }
     if (sel?.kind === 'furniture' && fp.furniture?.[sel.i]) {
       const f = fp.furniture[sel.i];
       const item = ITEMS.get(f.type);
       html += `<div class="ed-card"><b>${esc(item?.name ?? f.type)}</b>
         <small>x ${f.position_m[0].toFixed(2)} · z ${f.position_m[1].toFixed(2)} m · facing ${f.rotation_deg || 0}°</small>
+        ${item?.heat_source ? `<label>Heater power (W) <input data-f="fwatts" type="number" step="100" min="50" max="5000" value="${Number.isFinite(+f.watts) ? +f.watts : 1500}" /></label><small>This radiator IS a heater: it drives the Heating and Airflow tabs.</small>` : ''}
         <div class="ed-group"><button data-act="rot" class="icon-button">Rotate 90° (R)</button><button data-act="fdel" class="icon-button">Delete</button></div></div>`;
     } else if (sel?.kind === 'wall' && fp.walls[sel.i]) {
       const w = fp.walls[sel.i];
@@ -224,6 +228,9 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     if (f === 'underlay') {
       showUnderlay = e.target.checked;
       return render();
+    }
+    if (f === 'fwatts' && sel?.kind === 'furniture') {
+      return commit(ops.updateFurniture(fp, sel.i, { watts: Math.min(5000, Math.max(50, Number(e.target.value) || 1500)) }));
     }
     if (f === 'ftype') {
       if (ITEMS.has(e.target.value)) furnType = e.target.value;
@@ -334,6 +341,27 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     sel = null;
     render();
   }
+  /** Place a piece; wall-mounted heat sources (radiators) snap to the nearest wall and become heaters (watts). */
+  function placeFurniture(type, pos, extra = {}) {
+    const item = ITEMS.get(type);
+    if (!item) return;
+    let position = ops.snapPt(pos, 0.05);
+    let rot = 0;
+    if (item.heat_source) {
+      ({ position_m: position, rotation_deg: rot } = ops.snapToWall(fp, item, pos));
+      extra = { watts: 1500, ...extra };
+    }
+    commit(ops.addFurniture(fp, type, position, rot, extra));
+    sel = { kind: 'furniture', i: fp.furniture.length - 1 };
+    render();
+  }
+  function removeFurnitureWhere(pred) {
+    let next = fp;
+    for (let i = (fp.furniture ?? []).length - 1; i >= 0; i--) if (pred(fp.furniture[i], ITEMS.get(fp.furniture[i].type))) next = ops.deleteFurniture(next, i);
+    sel = null;
+    commit(next);
+    render();
+  }
   function rotateSel() {
     if (sel?.kind === 'furniture' && fp.furniture?.[sel.i]) commit(ops.rotateFurniture(fp, sel.i));
   }
@@ -374,9 +402,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
         svg.setPointerCapture(e.pointerId);
         return render();
       }
-      commit(ops.addFurniture(fp, furnType, ops.snapPt(pointer(e), 0.05)));
-      sel = { kind: 'furniture', i: fp.furniture.length - 1 };
-      render();
+      placeFurniture(furnType, pointer(e));
       return;
     }
     if (tool === 'room') {
@@ -446,5 +472,5 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
 
   fit();
   render();
-  return { setPlan, setBanner, loadDraft, render, resize: () => render(), getPlan: () => fp, setTool };
+  return { setPlan, setBanner, loadDraft, placeFurniture, removeFurnitureWhere, render, resize: () => render(), getPlan: () => fp, setTool };
 }
