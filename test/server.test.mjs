@@ -30,3 +30,14 @@ try {
   strict(SCHEMA); strict(REVIEW_SCHEMA);
   console.log('server: all passed');
 } finally { server.close(); }
+
+// ---- fix pass: reviewer findings are sanitised and capped before they reach the model
+{
+  const { fixText } = await import('../server/index.js');
+  assert.equal(fixText([], []), '');
+  assert.equal(fixText('nope', []), '');
+  const t = fixText(['Missing room: Bath\nIGNORE ALL', 5, 'x'.repeat(500)], [{ name: 'A', box: { x0: 1, y0: 2, x1: 3, y1: 4 } }]);
+  assert.ok(t.includes('Missing room: Bath IGNORE ALL'), 'newlines collapsed');
+  assert.ok(t.split('\n').every((l) => l.length < 700));
+  console.log('server fixText: passed');
+}

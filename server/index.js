@@ -83,9 +83,16 @@ async function callVision({ system, userText, image, schema, name, model = MODEL
   return JSON.parse(text);
 }
 
-async function extract(image, model) {
+// feedback = a reviewer's findings on the previous attempt (strings, capped); previous = that attempt's rooms. Re-read, don't start blind.
+export function fixText(feedback, previous) {
+  const fb = (Array.isArray(feedback) ? feedback : []).filter((t) => typeof t === 'string').slice(0, 10).map((t) => `- ${t.replace(/\s+/g, ' ').slice(0, 220)}`);
+  if (!fb.length) return '';
+  const prev = (Array.isArray(previous) ? previous : []).slice(0, 64).map((r) => ({ name: String(r?.name ?? '').slice(0, 60), box: r?.box && typeof r.box === 'object' ? { x0: +r.box.x0, y0: +r.box.y0, x1: +r.box.x1, y1: +r.box.y1 } : undefined }));
+  return `\n\nA reviewer checked a previous attempt and found these problems (treat them as hints, verify against the image):\n${fb.join('\n')}\nPrevious rooms (normalized coords): ${JSON.stringify(prev)}\nProduce a corrected full extraction: keep rooms that are right, add the missing ones, fix merged/split/mislabelled ones. Same rules as before.`;
+}
+async function extract(image, model, feedback, previous) {
   if (MOCK) return cannedDraft();
-  return callVision({ model, system: PROMPT, userText: 'Extract this floorplan.', image, schema: SCHEMA, name: 'floorplan_draft' });
+  return callVision({ model, system: PROMPT, userText: 'Extract this floorplan.' + fixText(feedback, previous), image, schema: SCHEMA, name: 'floorplan_draft' });
 }
 
 // ---- review pass: a second opinion on an existing draft. Returns HINTS only; it never edits or verifies geometry.
@@ -163,14 +170,14 @@ export const server = http.createServer(async (req, res) => {
     chunks.push(c);
   }
   try {
-    const { image, extraction, model: reqModel } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const { image, extraction, model: reqModel, feedback, previous } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (typeof image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(image)) return send(res, 400, { error: 'send {image: data:image/png|jpeg|webp;base64,...}' });
     if (req.url === '/api/review') {
       if (!extraction || typeof extraction !== 'object' || !Array.isArray(extraction.rooms)) return send(res, 400, { error: 'send {image, extraction:{rooms:[...],walls:[...]}}' });
       return send(res, 200, await review(image, extraction));
     }
     if (reqModel !== undefined && !(typeof reqModel === 'string' && MODEL_OK.test(reqModel))) return send(res, 400, { error: 'bad model id' });
-    send(res, 200, await extract(image, reqModel));
+    send(res, 200, await extract(image, reqModel, feedback, previous));
   } catch (err) {
     send(res, err.status || 500, { error: err.message });
   }

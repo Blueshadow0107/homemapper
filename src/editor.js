@@ -23,7 +23,7 @@ const h = (html) => {
  * 2D plan editor. Owns an SVG + toolbar inside `root`; reports every committed or in-progress edit via
  * onChange(fp, {refit?, scaleFactor?}). The plan itself stays plain JSON (docs/data-contract.md).
  */
-export function createEditor({ root, plan, onChange, getRouter, onRouterMove, onUploadImage, onReviewDraft, onDone }) {
+export function createEditor({ root, plan, onChange, getRouter, onRouterMove, onUploadImage, onReviewDraft, onFixDraft, onDone }) {
   let fp = plan;
   const history = [];
   let tool = 'select'; // select | wall | room | router
@@ -193,7 +193,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     if (banner) html += `<div class="ed-banner ${banner.level}">${banner.items.map((t) => `<div>${esc(t)}</div>`).join('')}${banner.checkable && fp.draft?.reviewed === false ? `${fp.draft.quality && fp.draft.quality !== 'ok' && onReviewDraft && !hints ? `<button data-act="review" class="icon-button" ${reviewing ? 'disabled' : ''}>${reviewing ? 'Checking…' : 'Check draft against image'}</button>` : ''}<button data-act="reviewed" class="icon-button">I have checked it</button>` : ''}</div>`;
     if (underlay) html += `<label class="ed-toggle"><input type="checkbox" data-f="underlay" ${showUnderlay ? 'checked' : ''} /> show source image</label>`;
     if (hints) {
-      html += `<div class="ed-banner info"><div>Second opinion (not verified)</div><div>${esc(hints.summary)}</div>${hints.missing.length ? `<div>May be missing: ${hints.missing.map((m) => esc(m.label)).join(', ')}. Its positions are not reliable, so check the source image and draw any real ones with the Room tool.</div>` : ''}${hints.notes.map((n) => `<div>• ${esc(n)}</div>`).join('')}${hints.dimension ? `<div>Printed dimension: ${esc(hints.dimension)} — type it as the width when re-uploading, or use "Set plan scale".</div>` : ''}<div>Suggested next step: ${esc(hints.next)}</div><button data-act="dismiss-hints" class="icon-button">Dismiss</button></div>`;
+      html += `<div class="ed-banner info"><div>Second opinion (not verified)</div><div>${esc(hints.summary)}</div>${hints.missing.length ? `<div>May be missing: ${hints.missing.map((m) => esc(m.label)).join(', ')}. Its positions are not reliable, so check the source image and draw any real ones with the Room tool.</div>` : ''}${hints.notes.map((n) => `<div>• ${esc(n)}</div>`).join('')}${hints.dimension ? `<div>Printed dimension: ${esc(hints.dimension)} — type it as the width when re-uploading, or use "Set plan scale".</div>` : ''}<div>Suggested next step: ${esc(hints.next)}</div>${onFixDraft && (hints.missing.length || hints.notes.length) ? `<button data-act="fix" class="icon-button primary">Fix these issues (re-read the plan)</button>` : ''}<button data-act="dismiss-hints" class="icon-button">Dismiss</button></div>`;
     }
     html += `<div class="ed-hint">${toolHint[tool]}</div>`;
     if (tool === 'furniture') {
@@ -258,6 +258,11 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   side.addEventListener('click', async (e) => {
     const a = e.target.dataset.act;
     if (a === 'to3d') return onDone?.();
+    if (a === 'fix' && onFixDraft && hints?.feedback?.length) {
+      const fb = hints.feedback;
+      hints = null;
+      return onFixDraft(fb); // re-reads the image; lands as a new (undoable) unverified draft
+    }
     if (a === 'dismiss-hints') {
       hints = null;
       return render();
@@ -269,7 +274,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
         const h = await onReviewDraft();
         const NEXT = { looks_ok: 'it did not find obvious problems (still verify yourself)', add_missing_rooms: 'add the missing rooms', fix_layout: 'fix the layout issues listed', enter_width: 'enter the printed width for a correct scale', crop_tighter: 'crop tighter and re-upload', retry_better_image: 'try a clearer image' };
         // labels only: the model's box coordinates proved unreliable on real plans, so they are deliberately not used
-        hints = { summary: String(h.summary).slice(0, 400), missing: (h.likely_missing_rooms ?? []).slice(0, 12).map((m) => ({ label: String(m.label).slice(0, 60) })), notes: (h.layout_notes ?? []).slice(0, 8).map((n) => String(n).slice(0, 200)), dimension: h.dimension_legible && h.dimension_text ? String(h.dimension_text).slice(0, 40) : null, next: NEXT[h.next_action] ?? 'review the draft' };
+        hints = { summary: String(h.summary).slice(0, 400), missing: (h.likely_missing_rooms ?? []).slice(0, 12).map((m) => ({ label: String(m.label).slice(0, 60) })), notes: (h.layout_notes ?? []).slice(0, 8).map((n) => String(n).slice(0, 200)), dimension: h.dimension_legible && h.dimension_text ? String(h.dimension_text).slice(0, 40) : null, next: NEXT[h.next_action] ?? 'review the draft', feedback: [String(h.summary).slice(0, 220), ...(h.likely_missing_rooms ?? []).slice(0, 12).map((m) => `Missing room: ${String(m.label).slice(0, 60)}`), ...(h.layout_notes ?? []).slice(0, 8).map((n) => String(n).slice(0, 200))].filter((t) => t.length > 8) };
       } catch (err) {
         banner = { level: 'error', items: [`Review failed: ${err.message}`], checkable: false };
       }

@@ -353,19 +353,33 @@ async function reviewDraft() {
   if (!res.ok) throw new Error(body.error || `server returned ${res.status}`);
   return body;
 }
+// one read of the plan image; `fix` (optional) = findings from the review pass so the model corrects its previous attempt
+async function readPlan(pick, name, fix) {
+  const res = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: pick.image, model: new URLSearchParams(location.search).get('model') || undefined, feedback: fix?.feedback, previous: fix?.previous }) }); // ?model=… picks the vision model (server validates)
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `server returned ${res.status}`);
+  const out = draftToFloorplan(body, { imgW: pick.width, imgH: pick.height, name, widthHintM: pick.widthHintM });
+  lastDraft = { pick, name, raw: body, image: pick.image };
+  editor.loadDraft(out.floorplan, { ...out.underlay, href: pick.image }, out.warnings, out.quality);
+}
+async function fixDraft(feedback) {
+  if (!lastDraft) throw new Error('no draft to fix');
+  const pre = lastDraft.raw.rooms ?? [];
+  editor.setBanner({ level: 'info', items: ['Re-reading the plan with the reviewer\'s findings… (about a minute)'] });
+  try {
+    await readPlan(lastDraft.pick, lastDraft.name, { feedback, previous: pre.map((r) => ({ name: r.name, box: r.box })) });
+  } catch (err) {
+    editor.setBanner({ level: 'error', items: [`Fix failed: ${err.message}`] });
+  }
+}
 async function uploadPlan(file) {
   const bust = (items, level = 'error') => editor.setBanner({ level, items });
   try {
     const pick = await openUploadDialog(file); // crop to one plan + optional real width
     if (!pick) return;
     if (pick.error) return bust([pick.error]);
-    bust(['Reading your plan… (a few seconds)'], 'info');
-    const res = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: pick.image, model: new URLSearchParams(location.search).get('model') || undefined }) }); // ?model=… picks the vision model (server validates)
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error || `server returned ${res.status}`);
-    const { floorplan: fp, underlay, warnings, quality } = draftToFloorplan(body, { imgW: pick.width, imgH: pick.height, name: file.name.replace(/\.[^.]+$/, ''), widthHintM: pick.widthHintM });
-    lastDraft = { image: pick.image, raw: body };
-    editor.loadDraft(fp, { ...underlay, href: pick.image }, warnings, quality);
+    bust(['Reading your plan… (up to a minute)'], 'info');
+    await readPlan(pick, file.name.replace(/\.[^.]+$/, ''));
   } catch (err) {
     const noServer = /Failed to fetch|NetworkError|returned 50[24]/.test(err.message);
     bust([`Upload failed: ${err.message}`, ...(noServer ? ['Is the draft server running? Start it from a terminal that has OPENAI_API_KEY: npm run draft-server'] : [])]);
@@ -381,6 +395,7 @@ const editor = createEditor({
   },
   onUploadImage: uploadPlan,
   onReviewDraft: reviewDraft,
+  onFixDraft: fixDraft,
   onDone: () => showTab(false),
   onChange: (fp, { refit, scaleFactor, draft } = {}) => {
     floorplan = fp;
