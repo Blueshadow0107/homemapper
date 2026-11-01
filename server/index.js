@@ -7,6 +7,7 @@ import http from 'node:http';
 const PORT = Number(process.env.PORT || 5176);
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 const MOCK = process.env.DRAFT_MOCK === '1' || process.env.DRAFT_MOCK === 'weak'; // 'weak' = canned draft that scores poor, for UI tests
+const MODEL_OK = /^(gpt-[a-z0-9.\-]{1,40}|o\d[a-z0-9.\-]{0,20})$/; // optional per-request model override (loopback only)
 const MAX_BODY = 9 * 1024 * 1024;
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 const ALLOWED_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost):\d+$/;
@@ -60,14 +61,14 @@ function cannedDraft() {
   };
 }
 
-async function callVision({ system, userText, image, schema, name }) {
+async function callVision({ system, userText, image, schema, name, model = MODEL }) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw Object.assign(new Error('OPENAI_API_KEY is not set in the environment that started this server'), { status: 503 });
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: [{ type: 'text', text: userText }, { type: 'image_url', image_url: { url: image, detail: 'high' } }] },
@@ -82,9 +83,9 @@ async function callVision({ system, userText, image, schema, name }) {
   return JSON.parse(text);
 }
 
-async function extract(image) {
+async function extract(image, model) {
   if (MOCK) return cannedDraft();
-  return callVision({ system: PROMPT, userText: 'Extract this floorplan.', image, schema: SCHEMA, name: 'floorplan_draft' });
+  return callVision({ model, system: PROMPT, userText: 'Extract this floorplan.', image, schema: SCHEMA, name: 'floorplan_draft' });
 }
 
 // ---- review pass: a second opinion on an existing draft. Returns HINTS only; it never edits or verifies geometry.
@@ -144,6 +145,14 @@ export const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'OPTIONS') return send(res, 204, {});
   if (req.method === 'GET' && req.url === '/api/health') return send(res, 200, { ok: true, mock: MOCK, model: MOCK ? null : MODEL, key_set: Boolean(process.env.OPENAI_API_KEY) });
+  if (req.method === 'GET' && req.url === '/api/models') {
+    if (MOCK || !process.env.OPENAI_API_KEY) return send(res, 200, { models: [] });
+    try { // names only: the key never leaves this process
+      const r = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
+      const b = await r.json();
+      return send(res, 200, { models: (b.data ?? []).map((m) => m.id).filter((id) => MODEL_OK.test(id)).sort() });
+    } catch (err) { return send(res, 502, { error: 'could not list models' }); }
+  }
   if (req.method !== 'POST' || !['/api/draft', '/api/review'].includes(req.url)) return send(res, 404, { error: 'not found' });
 
   let size = 0;
@@ -154,13 +163,14 @@ export const server = http.createServer(async (req, res) => {
     chunks.push(c);
   }
   try {
-    const { image, extraction } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const { image, extraction, model: reqModel } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (typeof image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(image)) return send(res, 400, { error: 'send {image: data:image/png|jpeg|webp;base64,...}' });
     if (req.url === '/api/review') {
       if (!extraction || typeof extraction !== 'object' || !Array.isArray(extraction.rooms)) return send(res, 400, { error: 'send {image, extraction:{rooms:[...],walls:[...]}}' });
       return send(res, 200, await review(image, extraction));
     }
-    send(res, 200, await extract(image));
+    if (reqModel !== undefined && !(typeof reqModel === 'string' && MODEL_OK.test(reqModel))) return send(res, 400, { error: 'bad model id' });
+    send(res, 200, await extract(image, reqModel));
   } catch (err) {
     send(res, err.status || 500, { error: err.message });
   }
