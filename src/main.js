@@ -4,6 +4,8 @@ import { draftToFloorplan } from './draft.js';
 import { simulate } from '../thermal-model/index.js';
 import { createCfdLayer } from './cfd/layer.js';
 import { startCfd } from './cfd/client.js';
+import catalog from '../assets/furniture/catalog.json';
+import { furnitureObstacles } from './furniture-geometry.js';
 import { createViewer } from './viewer.js';
 import './styles.css';
 
@@ -275,6 +277,7 @@ $('#cfd-run').addEventListener('click', async () => {
         duration_s: 10800,
         frame_every_s: 60, // app owns the frame cadence (Kimi: worker keeps its own stability dt)
         cell_m: 0.25,
+        obstacles: furnitureObstacles(floorplan, catalog), // solid furniture as plan-space boxes (AABB) — proposal, Kimi may prefer voxel masks
         heaters: live.map((h) => ({ position_m: h.position_m, height_m: 0.3, watts: h.watts, room_id: roomAt(floorplan, h.position_m).id })),
       },
       onGrid: (g) => cfd.setGrid(g),

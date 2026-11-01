@@ -1,4 +1,8 @@
 import * as ops from './plan-ops.js';
+import catalog from '../assets/furniture/catalog.json';
+import { footprintRect } from './furniture-geometry.js';
+const ITEMS = new Map(catalog.items.map((i) => [i.id, i]));
+const CAT_COLOR = { bedroom: '#c9b6f0', living: '#b6d3f0', dining: '#e8c9a0', office: '#e8d9a0', kitchen: '#cfd8e0', bathroom: '#bfe3e0', heating: '#f0b9a0', decor: '#b9e0bf' };
 import { normalizePlan } from './plan-schema.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -31,6 +35,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   let underlay = null; // {href,x,y,w,h} faint source image for checking an AI draft
   let banner = null; // {level:'info'|'warn'|'error', items:string[]}
   let showUnderlay = true;
+  let furnType = 'sofa';
 
   root.innerHTML = '';
   const bar = h(`<div class="ed-bar">
@@ -39,6 +44,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       <button data-tool="wall" class="icon-button">Wall</button>
       <button data-tool="room" class="icon-button">Room</button>
       <button data-tool="router" class="icon-button">Router</button>
+      <button data-tool="furniture" class="icon-button">Furniture</button>
     </div>
     <div class="ed-group">
       <button data-act="undo" class="icon-button">Undo</button>
@@ -65,6 +71,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     wall: 'Click to start a wall, click again to place it · Esc to stop',
     room: 'Drag a rectangle to add a room',
     router: 'Click to place the router',
+    furniture: 'Pick a piece, click the plan to place it · drag to move · R rotates the selected piece',
   };
 
   // ---------- helpers
@@ -122,6 +129,19 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       t.textContent = r.name;
     });
 
+    (fp.furniture ?? []).forEach((f, i) => {
+      const item = ITEMS.get(f.type);
+      if (!item) return;
+      const [w, , d] = item.size_m;
+      const isSel = sel?.kind === 'furniture' && sel.i === i;
+      const g = el('g', { transform: `translate(${f.position_m[0]} ${f.position_m[1]}) rotate(${f.rotation_deg || 0})` }, svg);
+      const r = el('rect', { x: -w / 2, y: -d / 2, width: w, height: d, rx: 0.05, fill: CAT_COLOR[item.category] || '#ccc', class: 'ed-furn' + (isSel ? ' sel' : '') }, g);
+      r.dataset.furn = i;
+      el('line', { x1: -w / 2 + 0.06, y1: d / 2 - 0.05, x2: w / 2 - 0.06, y2: d / 2 - 0.05, class: 'ed-furn-front' }, g); // front edge (+z at rotation 0)
+      const t = el('text', { x: f.position_m[0], y: f.position_m[1] + 0.08, class: 'ed-furn-label' }, svg);
+      t.textContent = item.name;
+    });
+
     fp.walls.forEach((w, i) => {
       const isSel = sel?.kind === 'wall' && sel.i === i;
       const line = el('line', {
@@ -169,7 +189,18 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     if (banner) html += `<div class="ed-banner ${banner.level}">${banner.items.map((t) => `<div>${esc(t)}</div>`).join('')}</div>`;
     if (underlay) html += `<label class="ed-toggle"><input type="checkbox" data-f="underlay" ${showUnderlay ? 'checked' : ''} /> show source image</label>`;
     html += `<div class="ed-hint">${toolHint[tool]}</div>`;
-    if (sel?.kind === 'wall' && fp.walls[sel.i]) {
+    if (tool === 'furniture') {
+      const cats = [...new Set(catalog.items.map((i) => i.category))];
+      html += `<div class="ed-card"><b>Place</b><label>Piece <select data-f="ftype">${cats.map((c) => `<optgroup label="${esc(c)}">${catalog.items.filter((i) => i.category === c).map((i) => `<option value="${esc(i.id)}" ${i.id === furnType ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}</optgroup>`).join('')}</select></label>
+        <small>${ITEMS.get(furnType)?.solid ? 'Solid: blocks airflow in the Airflow tab.' : 'Open/low: does not block airflow.'}</small></div>`;
+    }
+    if (sel?.kind === 'furniture' && fp.furniture?.[sel.i]) {
+      const f = fp.furniture[sel.i];
+      const item = ITEMS.get(f.type);
+      html += `<div class="ed-card"><b>${esc(item?.name ?? f.type)}</b>
+        <small>x ${f.position_m[0].toFixed(2)} · z ${f.position_m[1].toFixed(2)} m · facing ${f.rotation_deg || 0}°</small>
+        <div class="ed-group"><button data-act="rot" class="icon-button">Rotate 90° (R)</button><button data-act="fdel" class="icon-button">Delete</button></div></div>`;
+    } else if (sel?.kind === 'wall' && fp.walls[sel.i]) {
       const w = fp.walls[sel.i];
       html += `<div class="ed-card"><b>Wall ${sel.i + 1}</b>
         <label>Material <select data-f="material_id">${ops.MATERIALS.map((m) => `<option ${m === w.material_id ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></label>
@@ -194,6 +225,10 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       showUnderlay = e.target.checked;
       return render();
     }
+    if (f === 'ftype') {
+      if (ITEMS.has(e.target.value)) furnType = e.target.value;
+      return render();
+    }
     if (sel?.kind === 'wall') {
       if (f === 'material_id' || f === 'exposure') commit(ops.updateWall(fp, sel.i, { [f]: e.target.value }));
       if (f === 'length') {
@@ -209,7 +244,10 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     }
   });
   side.addEventListener('click', (e) => {
-    if (e.target.dataset.act !== 'scale' || sel?.kind !== 'wall') return;
+    const a = e.target.dataset.act;
+    if (a === 'rot' && sel?.kind === 'furniture') return rotateSel();
+    if (a === 'fdel' && sel?.kind === 'furniture') return del();
+    if (a !== 'scale' || sel?.kind !== 'wall') return;
     const v = Number(side.querySelector('[data-f=length]').value);
     const { fp: next, factor } = ops.scaleToLength(fp, sel.i, v);
     if (factor !== 1) {
@@ -292,14 +330,19 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   function del() {
     if (sel?.kind === 'wall') commit(ops.deleteWall(fp, sel.i));
     else if (sel?.kind === 'room') commit(ops.deleteRoom(fp, sel.i));
+    else if (sel?.kind === 'furniture') commit(ops.deleteFurniture(fp, sel.i));
     sel = null;
     render();
+  }
+  function rotateSel() {
+    if (sel?.kind === 'furniture' && fp.furniture?.[sel.i]) commit(ops.rotateFurniture(fp, sel.i));
   }
   root.tabIndex = -1;
   root.addEventListener('keydown', (e) => {
     if (e.target.matches('input,select')) return;
     if (e.key === 'Escape') setTool(tool === 'wall' ? 'wall' : 'select');
     if (e.key === 'Delete' || e.key === 'Backspace') del();
+    if (e.key === 'r' || e.key === 'R') rotateSel();
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') undo();
   });
 
@@ -321,6 +364,21 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       render();
       return;
     }
+    if (tool === 'furniture') {
+      const hitF = e.target.dataset?.furn;
+      if (hitF !== undefined) { // clicking an existing piece selects/drags it even in this tool
+        sel = { kind: 'furniture', i: Number(hitF) };
+        const f0 = fp.furniture[sel.i];
+        const raw0 = pointer(e);
+        drag = { furn: sel.i, base: fp, off: [raw0[0] - f0.position_m[0], raw0[1] - f0.position_m[1]], moved: false };
+        svg.setPointerCapture(e.pointerId);
+        return render();
+      }
+      commit(ops.addFurniture(fp, furnType, ops.snapPt(pointer(e), 0.05)));
+      sel = { kind: 'furniture', i: fp.furniture.length - 1 };
+      render();
+      return;
+    }
     if (tool === 'room') {
       drag = { room: true, from: p, to: p };
       svg.setPointerCapture(e.pointerId);
@@ -333,6 +391,14 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       svg.setPointerCapture(e.pointerId);
       return;
     }
+    if (e.target.dataset?.furn !== undefined) {
+      sel = { kind: 'furniture', i: Number(e.target.dataset.furn) };
+      const f0 = fp.furniture[sel.i];
+      const raw0 = pointer(e);
+      drag = { furn: sel.i, base: fp, off: [raw0[0] - f0.position_m[0], raw0[1] - f0.position_m[1]], moved: false };
+      svg.setPointerCapture(e.pointerId);
+      return render();
+    }
     if (e.target.dataset?.wall !== undefined) sel = { kind: 'wall', i: Number(e.target.dataset.wall) };
     else if (e.target.dataset?.room !== undefined) sel = { kind: 'room', i: Number(e.target.dataset.room) };
     else sel = null;
@@ -342,6 +408,15 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     hover = snapped(e);
     if (drag?.room) {
       drag.to = hover;
+      render();
+    } else if (drag?.furn !== undefined) {
+      const raw = pointer(e);
+      if (!drag.moved) {
+        history.push(drag.base);
+        drag.moved = true;
+      }
+      fp = ops.moveFurniture(drag.base, drag.furn, ops.snapPt([raw[0] - drag.off[0], raw[1] - drag.off[1]], 0.05));
+      onChange(fp, {});
       render();
     } else if (drag?.orig) {
       if (!drag.moved) {
@@ -358,6 +433,9 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       const next = ops.addRoom(fp, drag.from, drag.to);
       drag = null;
       commit(next);
+      render();
+    } else if (drag?.furn !== undefined) {
+      drag = null;
       render();
     } else if (drag?.orig) {
       drag = null;

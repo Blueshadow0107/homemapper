@@ -65,6 +65,14 @@ export function normalizePlan(raw) {
     closed: o.closed !== false,
   }));
 
+  const usedF = new Set();
+  const furniture = (Array.isArray(raw.furniture) ? raw.furniture : []).slice(0, 200).filter((f) => f && typeof f === 'object' && typeof f.type === 'string' && MAT.test(f.type)).map((f, i) => {
+    let id = typeof f.id === 'string' && ID.test(f.id) ? f.id : `furn-${i + 1}`;
+    while (usedF.has(id)) id += '_';
+    usedF.add(id);
+    return { id, type: f.type, position_m: point(f.position_m, `furniture ${i + 1}`), rotation_deg: ((Math.round(num(f.rotation_deg, -3600, 3600, 0) / 90) * 90) % 360 + 360) % 360 };
+  });
+
   const plan = {
     schema_version: 1,
     name: str(raw.name, 80, 'Imported plan'),
@@ -73,6 +81,7 @@ export function normalizePlan(raw) {
     rooms,
     walls,
     openings,
+    furniture,
   };
   if (raw.draft && typeof raw.draft === 'object') plan.draft = { source: str(raw.draft.source, 20, 'unknown'), reviewed: raw.draft.reviewed === true };
   if (raw.materials && typeof raw.materials === 'object' && !Array.isArray(raw.materials)) {

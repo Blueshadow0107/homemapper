@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import catalog from '../assets/furniture/catalog.json';
+import { buildFurniture } from './furniture.js';
+const ITEMS = new Map(catalog.items.map((i) => [i.id, i]));
 
 // Plan coords are [x, z] metres (z down the plan) -> world [x, y, -z]. See docs/data-contract.md.
 const toWorld = ([x, z], y = 0) => new THREE.Vector3(x, y, -z);
@@ -142,8 +145,10 @@ export function createViewer({ mount, floorplan: initial }) {
 
   function disposeShell() {
     for (const o of [...shell.children]) {
-      o.geometry?.dispose();
-      o.material?.dispose();
+      o.traverse((n) => {
+        n.geometry?.dispose();
+        n.material?.dispose();
+      });
       shell.remove(o);
     }
   }
@@ -190,6 +195,14 @@ export function createViewer({ mount, floorplan: initial }) {
       mesh.receiveShadow = true;
       shell.add(mesh);
       wallMeshes.push(mesh);
+    }
+    for (const f of floorplan.furniture ?? []) {
+      const item = ITEMS.get(f.type);
+      if (!item) continue; // unknown type in an imported plan: skip rather than crash
+      const g = buildFurniture(item);
+      g.position.copy(toWorld(f.position_m, 0));
+      g.rotation.y = THREE.MathUtils.degToRad(f.rotation_deg || 0); // plan-clockwise == +rotation.y (plan z = -world z)
+      shell.add(g);
     }
     setWallMode(wallModeCur);
     applyHeat();

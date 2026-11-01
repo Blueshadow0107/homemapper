@@ -89,6 +89,7 @@ export function scaleToLength(fp, i, metres) {
     w.b = sc(w.b);
   }
   for (const r of out.rooms) r.polygon = r.polygon.map(sc);
+  for (const f of out.furniture ?? []) f.position_m = sc(f.position_m); // positions scale; catalog sizes are real-world and do not
   return { fp: out, factor: k };
 }
 
@@ -129,4 +130,29 @@ export function bounds(fp) {
     minZ: Math.min(...pts.map((p) => p[1])),
     maxZ: Math.max(...pts.map((p) => p[1])),
   };
+}
+
+// ---- furniture (catalog ids live in assets/furniture/catalog.json; types are validated at render time)
+export function addFurniture(fp, type, position_m, rotation_deg = 0) {
+  const out = clone(fp);
+  out.furniture ??= [];
+  let n = out.furniture.length + 1;
+  while (out.furniture.some((f) => f.id === `furn-${n}`)) n++;
+  out.furniture.push({ id: `furn-${n}`, type, position_m: [...position_m], rotation_deg });
+  return out;
+}
+export function moveFurniture(fp, i, position_m) {
+  const out = clone(fp);
+  out.furniture[i].position_m = [...position_m];
+  return out;
+}
+export function rotateFurniture(fp, i, step = 90) {
+  const out = clone(fp);
+  out.furniture[i].rotation_deg = (((out.furniture[i].rotation_deg + step) % 360) + 360) % 360;
+  return out;
+}
+export function deleteFurniture(fp, i) {
+  const out = clone(fp);
+  out.furniture.splice(i, 1);
+  return out;
 }

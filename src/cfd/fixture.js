@@ -18,7 +18,7 @@ const inPoly = (P, x, z) => {
   return inside;
 };
 
-export function buildGrid(fp, cell_m, heaters = []) {
+export function buildGrid(fp, cell_m, heaters = [], obstacles = []) {
   const pts = fp.rooms.flatMap((r) => r.polygon);
   // Align the lattice so plan lines at multiples of cell_m land on cell CENTRES. A wall sitting exactly on a cell
   // boundary would otherwise be >half-thickness from both neighbouring centres and vanish (air leaks through it).
@@ -39,6 +39,16 @@ export function buildGrid(fp, cell_m, heaters = []) {
       const solid = !inRoom || onWall;
       for (let iy = 0; iy < ny; iy++) cell_type[(iy * nz + iz) * nx + ix] = solid ? 1 : 0;
     }
+  // furniture: solid boxes (plan-space AABBs with a height), conservatively rasterised like walls
+  for (const o of obstacles)
+    for (let iz = 0; iz < nz; iz++)
+      for (let ix = 0; ix < nx; ix++) {
+        const cx0 = x0 + ix * cell_m;
+        const cz0 = z0 + iz * cell_m;
+        if (cx0 + cell_m <= o.x0 || cx0 >= o.x1 || cz0 + cell_m <= o.z0 || cz0 >= o.z1) continue; // no overlap with the cell
+        const top = Math.ceil(o.height_m / cell_m - 1e-9);
+        for (let iy = 0; iy < Math.min(ny, top); iy++) cell_type[(iy * nz + iz) * nx + ix] = 1;
+      }
   for (const h of heaters) {
     const ix = Math.floor((h.position_m[0] - x0) / cell_m);
     const iz = Math.floor((h.position_m[1] - z0) / cell_m);
@@ -84,7 +94,7 @@ function makeFrame(grid, heaters, t, ambient) {
 /** Same message surface as the real worker: post({type:'grid'|'frame'|'progress'|'done'|'error'}). */
 export function runFixture(msg, post, isCancelled) {
   const sc = msg.scenario ?? {};
-  const grid = buildGrid(msg.floorplan, sc.cell_m ?? 0.25, sc.heaters ?? []);
+  const grid = buildGrid(msg.floorplan, sc.cell_m ?? 0.25, sc.heaters ?? [], sc.obstacles ?? []);
   post({ type: 'grid', grid });
   const dur = sc.duration_s ?? 10800;
   const every = sc.frame_every_s ?? 60;
