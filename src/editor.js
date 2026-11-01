@@ -23,7 +23,7 @@ const h = (html) => {
  * 2D plan editor. Owns an SVG + toolbar inside `root`; reports every committed or in-progress edit via
  * onChange(fp, {refit?, scaleFactor?}). The plan itself stays plain JSON (docs/data-contract.md).
  */
-export function createEditor({ root, plan, onChange, getRouter, onRouterMove, onUploadImage }) {
+export function createEditor({ root, plan, onChange, getRouter, onRouterMove, onUploadImage, onReviewDraft }) {
   let fp = plan;
   const history = [];
   let tool = 'select'; // select | wall | room | router
@@ -35,6 +35,8 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   let underlay = null; // {href,x,y,w,h} faint source image for checking an AI draft
   let banner = null; // {level:'info'|'warn'|'error', items:string[]}
   let showUnderlay = true;
+  let hints = null; // review-pass output: hints only, never applied automatically
+  let reviewing = false;
   let furnType = 'sofa';
 
   root.innerHTML = '';
@@ -162,6 +164,13 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       t.textContent = item.name;
     });
 
+    if (hints && underlay) {
+      for (const m of hints.missing) {
+        el('rect', { x: m.x, y: m.y, width: m.w, height: m.h, class: 'ed-hint-box' }, svg);
+        const t = el('text', { x: m.x + m.w / 2, y: m.y + m.h / 2, class: 'ed-hint-label' }, svg);
+        t.textContent = `? ${m.label}`;
+      }
+    }
     if (tool === 'select' || tool === 'wall') {
       for (const v of verts()) {
         const c = el('circle', { cx: v[0], cy: v[1], r: 0.14, class: 'ed-vert' + (hover && Math.hypot(hover[0] - v[0], hover[1] - v[1]) < 0.3 ? ' hot' : '') }, svg);
@@ -189,8 +198,11 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   function renderSide() {
     const issues = ops.validate(fp);
     let html = '';
-    if (banner) html += `<div class="ed-banner ${banner.level}">${banner.items.map((t) => `<div>${esc(t)}</div>`).join('')}${banner.checkable && fp.draft?.reviewed === false ? '<button data-act="reviewed" class="icon-button">I have checked it</button>' : ''}</div>`;
+    if (banner) html += `<div class="ed-banner ${banner.level}">${banner.items.map((t) => `<div>${esc(t)}</div>`).join('')}${banner.checkable && fp.draft?.reviewed === false ? `${fp.draft.quality && fp.draft.quality !== 'ok' && onReviewDraft && !hints ? `<button data-act="review" class="icon-button" ${reviewing ? 'disabled' : ''}>${reviewing ? 'Checking…' : 'Check draft against image'}</button>` : ''}<button data-act="reviewed" class="icon-button">I have checked it</button>` : ''}</div>`;
     if (underlay) html += `<label class="ed-toggle"><input type="checkbox" data-f="underlay" ${showUnderlay ? 'checked' : ''} /> show source image</label>`;
+    if (hints) {
+      html += `<div class="ed-banner info"><div>Second opinion (not verified)</div><div>${esc(hints.summary)}</div>${hints.missing.length ? `<div>Dashed boxes = rooms it thinks are missing: ${hints.missing.map((m) => esc(m.label)).join(', ')}. Draw them with the Room tool if they are real.</div>` : ''}${hints.notes.map((n) => `<div>• ${esc(n)}</div>`).join('')}${hints.dimension ? `<div>Printed dimension: ${esc(hints.dimension)} — type it as the width when re-uploading, or use "Set plan scale".</div>` : ''}<div>Suggested next step: ${esc(hints.next)}</div><button data-act="dismiss-hints" class="icon-button">Dismiss</button></div>`;
+    }
     html += `<div class="ed-hint">${toolHint[tool]}</div>`;
     if (tool === 'furniture') {
       const cats = [...new Set(catalog.items.map((i) => i.category))];
@@ -250,8 +262,26 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
       commit({ ...fp, ceiling_height_m: Math.min(6, Math.max(2, Number(e.target.value) || 2.7)) });
     }
   });
-  side.addEventListener('click', (e) => {
+  side.addEventListener('click', async (e) => {
     const a = e.target.dataset.act;
+    if (a === 'dismiss-hints') {
+      hints = null;
+      return render();
+    }
+    if (a === 'review' && onReviewDraft && !reviewing && underlay) {
+      reviewing = true;
+      renderSide();
+      try {
+        const h = await onReviewDraft();
+        const mapBox = (m) => ({ label: String(m.label).slice(0, 60), x: underlay.x + (Math.min(m.x0, m.x1) / 1000) * underlay.w, y: underlay.y + (Math.min(m.y0, m.y1) / 1000) * underlay.h, w: (Math.abs(m.x1 - m.x0) / 1000) * underlay.w, h: (Math.abs(m.y1 - m.y0) / 1000) * underlay.h });
+        const NEXT = { looks_ok: 'it did not find obvious problems (still verify yourself)', add_missing_rooms: 'add the missing rooms', fix_layout: 'fix the layout issues listed', enter_width: 'enter the printed width for a correct scale', crop_tighter: 'crop tighter and re-upload', retry_better_image: 'try a clearer image' };
+        hints = { summary: String(h.summary).slice(0, 400), missing: (h.likely_missing_rooms ?? []).slice(0, 12).map(mapBox), notes: (h.layout_notes ?? []).slice(0, 8).map((n) => String(n).slice(0, 200)), dimension: h.dimension_legible && h.dimension_text ? String(h.dimension_text).slice(0, 40) : null, next: NEXT[h.next_action] ?? 'review the draft' };
+      } catch (err) {
+        banner = { level: 'error', items: [`Review failed: ${err.message}`], checkable: false };
+      }
+      reviewing = false;
+      return render();
+    }
     if (a === 'reviewed' && fp.draft) {
       banner = null;
       return commit({ ...fp, draft: { ...fp.draft, reviewed: true } });
@@ -312,6 +342,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     fp = normalizePlan(next);
     sel = null;
     underlay = under;
+    hints = null;
     banner = { level: quality === 'ok' ? 'warn' : 'error', items: ['AI DRAFT — not verified.', ...warnings], checkable: true };
     fit();
     onChange(fp, { refit: true, draft: true });

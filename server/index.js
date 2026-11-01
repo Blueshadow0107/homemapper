@@ -6,7 +6,7 @@ import http from 'node:http';
 
 const PORT = Number(process.env.PORT || 5176);
 const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
-const MOCK = process.env.DRAFT_MOCK === '1';
+const MOCK = process.env.DRAFT_MOCK === '1' || process.env.DRAFT_MOCK === 'weak'; // 'weak' = canned draft that scores poor, for UI tests
 const MAX_BODY = 9 * 1024 * 1024;
 const ALLOWED_HOSTS = new Set([`127.0.0.1:${PORT}`, `localhost:${PORT}`]);
 const ALLOWED_ORIGIN = /^http:\/\/(127\.0\.0\.1|localhost):\d+$/;
@@ -42,6 +42,7 @@ Coordinates: normalized 0-1000 on BOTH axes relative to the image (x=0 left, x=1
 - notes: anything else the user should know.`;
 
 function cannedDraft() {
+  const weak = process.env.DRAFT_MOCK === 'weak';
   const sq = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
   const W = (ax, ay, bx, by, exterior) => ({ a: { x: ax, y: ay }, b: { x: bx, y: by }, exterior });
   return {
@@ -53,14 +54,13 @@ function cannedDraft() {
     ],
     walls: [W(100, 100, 900, 100, true), W(900, 100, 900, 900, true), W(900, 900, 100, 900, true), W(100, 900, 100, 100, true), W(100, 500, 900, 500, false), W(600, 100, 600, 500, false), W(500, 500, 500, 900, false)],
     printed_overall_width_m: null,
-    plan_count: 1,
-    omitted_or_uncertain: [],
-    notes: 'MOCK extraction (DRAFT_MOCK=1) - not read from your image.',
+    plan_count: weak ? 2 : 1,
+    omitted_or_uncertain: weak ? ['small washroom not extracted'] : [],
+    notes: weak ? 'MOCK weak extraction: limited details and some missing areas.' : 'MOCK extraction (DRAFT_MOCK=1) - not read from your image.',
   };
 }
 
-async function extract(imageDataUrl) {
-  if (MOCK) return cannedDraft();
+async function callVision({ system, userText, image, schema, name }) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw Object.assign(new Error('OPENAI_API_KEY is not set in the environment that started this server'), { status: 503 });
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -69,10 +69,10 @@ async function extract(imageDataUrl) {
     body: JSON.stringify({
       model: MODEL,
       messages: [
-        { role: 'system', content: PROMPT },
-        { role: 'user', content: [{ type: 'text', text: 'Extract this floorplan.' }, { type: 'image_url', image_url: { url: imageDataUrl, detail: 'high' } }] },
+        { role: 'system', content: system },
+        { role: 'user', content: [{ type: 'text', text: userText }, { type: 'image_url', image_url: { url: image, detail: 'high' } }] },
       ],
-      response_format: { type: 'json_schema', json_schema: { name: 'floorplan_draft', strict: true, schema: SCHEMA } },
+      response_format: { type: 'json_schema', json_schema: { name, strict: true, schema } },
     }),
   });
   const body = await res.json().catch(() => ({}));
@@ -80,6 +80,52 @@ async function extract(imageDataUrl) {
   const text = body.choices?.[0]?.message?.content;
   if (!text) throw Object.assign(new Error('OpenAI returned no content (possible refusal)'), { status: 502 });
   return JSON.parse(text);
+}
+
+async function extract(image) {
+  if (MOCK) return cannedDraft();
+  return callVision({ system: PROMPT, userText: 'Extract this floorplan.', image, schema: SCHEMA, name: 'floorplan_draft' });
+}
+
+// ---- review pass: a second opinion on an existing draft. Returns HINTS only; it never edits or verifies geometry.
+const box = { type: 'object', additionalProperties: false, required: ['label', 'x0', 'y0', 'x1', 'y1'], properties: { label: { type: 'string' }, x0: { type: 'number' }, y0: { type: 'number' }, x1: { type: 'number' }, y1: { type: 'number' } } };
+export const REVIEW_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['summary', 'likely_missing_rooms', 'layout_notes', 'dimension_legible', 'dimension_text', 'next_action'],
+  properties: {
+    summary: { type: 'string' },
+    likely_missing_rooms: { type: 'array', items: box },
+    layout_notes: { type: 'array', items: { type: 'string' } },
+    dimension_legible: { type: 'boolean' },
+    dimension_text: { type: ['string', 'null'] },
+    next_action: { type: 'string', enum: ['looks_ok', 'add_missing_rooms', 'fix_layout', 'enter_width', 'crop_tighter', 'retry_better_image'] },
+  },
+};
+const REVIEW_PROMPT = `You are reviewing a machine-extracted DRAFT of one floorplan against the source image. You are a second opinion, not ground truth: say when you are unsure.
+Both the draft and your answers use normalized 0-1000 image coordinates (x=0 left, y=0 top).
+- likely_missing_rooms: enclosed rooms visible in the image that have NO room in the draft (bathrooms, toilets, closets, laundry, stores, kitchen...). Give the printed label if legible (else a short description) and a tight bounding box.
+- layout_notes: short strings about draft rooms that look merged, split, mislabelled or misplaced (e.g. "living and dining are one open space but drawn as two rooms"). Reference room names from the draft.
+- dimension_legible / dimension_text: whether an overall building dimension is printed and legible, and its text exactly as printed (e.g. 36'-10"), else null. Do not convert or guess.
+- next_action: the single most useful next step for the user.
+- summary: one or two sentences. Do not claim the draft is verified or correct.`;
+function cannedReview() {
+  return {
+    summary: 'MOCK review (DRAFT_MOCK=1) - not read from your image.',
+    likely_missing_rooms: [{ label: 'Washroom (mock)', x0: 700, y0: 520, x1: 880, y1: 700 }],
+    layout_notes: ['Mock note: living room and kitchen may be one open space.'],
+    dimension_legible: false,
+    dimension_text: null,
+    next_action: 'add_missing_rooms',
+  };
+}
+async function review(image, extraction) {
+  if (MOCK) return cannedReview();
+  const compact = JSON.stringify({
+    rooms: (extraction.rooms ?? []).slice(0, 64).map((r) => ({ name: String(r.name ?? '').slice(0, 60), polygon: (r.polygon ?? []).slice(0, 32) })),
+    walls: (extraction.walls ?? []).length,
+  });
+  return callVision({ system: REVIEW_PROMPT, userText: `Draft rooms (normalized coords) and wall count:\n${compact}`, image, schema: REVIEW_SCHEMA, name: 'draft_review' });
 }
 
 function send(res, status, obj) {
@@ -98,7 +144,7 @@ export const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'OPTIONS') return send(res, 204, {});
   if (req.method === 'GET' && req.url === '/api/health') return send(res, 200, { ok: true, mock: MOCK, model: MOCK ? null : MODEL, key_set: Boolean(process.env.OPENAI_API_KEY) });
-  if (req.method !== 'POST' || req.url !== '/api/draft') return send(res, 404, { error: 'not found' });
+  if (req.method !== 'POST' || !['/api/draft', '/api/review'].includes(req.url)) return send(res, 404, { error: 'not found' });
 
   let size = 0;
   const chunks = [];
@@ -108,8 +154,12 @@ export const server = http.createServer(async (req, res) => {
     chunks.push(c);
   }
   try {
-    const { image } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    const { image, extraction } = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (typeof image !== 'string' || !/^data:image\/(png|jpeg|webp);base64,/.test(image)) return send(res, 400, { error: 'send {image: data:image/png|jpeg|webp;base64,...}' });
+    if (req.url === '/api/review') {
+      if (!extraction || typeof extraction !== 'object' || !Array.isArray(extraction.rooms)) return send(res, 400, { error: 'send {image, extraction:{rooms:[...],walls:[...]}}' });
+      return send(res, 200, await review(image, extraction));
+    }
     send(res, 200, await extract(image));
   } catch (err) {
     send(res, err.status || 500, { error: err.message });

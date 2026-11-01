@@ -109,7 +109,7 @@ button { font: inherit; }
 .ed-ghost-room { fill: #7a4dff22; stroke: #7a4dff; stroke-width: 0.05; stroke-dasharray: 0.15; }
 .ed-router { fill: #2b2440; pointer-events: none; }
 .ed-router-ring { fill: none; stroke: #7a4dff; stroke-width: 0.04; pointer-events: none; }
-.ed-side { overflow: hidden; padding: 0 16px 12px 8px; display: flex; flex-direction: column; gap: 9px; font-size: 11px; color: #4b4560; }
+.ed-side { overflow-y: auto; padding: 0 16px 12px 8px; display: flex; flex-direction: column; gap: 9px; font-size: 11px; color: #4b4560; }
 .ed-hint { font-size: 10px; color: #7a7490; line-height: 1.4; }
 .ed-card { display: flex; flex-direction: column; gap: 7px; padding: 10px; border: 1px solid #ddd8ea; border-radius: 12px; background: #fff; }
 .ed-card label { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
@@ -185,3 +185,7 @@ button { font: inherit; }
 #draft-chip { display: inline-block; margin-top: 6px; margin-left: 0; }
 #draft-chip[hidden] { display: none; }
 .ed-banner .icon-button { align-self: flex-start; margin-top: 4px; }
+
+.ed-hint-box { fill: #f5b94222; stroke: #d98a00; stroke-width: 0.06; stroke-dasharray: 0.2 0.12; pointer-events: none; }
+.ed-hint-label { font: 0.24px sans-serif; fill: #8a5a00; text-anchor: middle; pointer-events: none; font-weight: 700; }
+.ed-banner button[disabled] { opacity: 0.6; }

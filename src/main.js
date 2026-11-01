@@ -334,6 +334,14 @@ $('#outside-temp').addEventListener('change', () => layer === 'heat' && runTherm
 // ---- 2D plan editor: every edit rebuilds the 3D shell and re-predicts the signal
 let raf = 0;
 // image -> (local proxy -> OpenAI vision) -> draft plan in the editor. The key never touches the browser.
+let lastDraft = null; // {image, raw} of the most recent AI read, for the optional review pass
+async function reviewDraft() {
+  if (!lastDraft) throw new Error('no draft to review');
+  const res = await fetch('/api/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: lastDraft.image, extraction: lastDraft.raw }) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `server returned ${res.status}`);
+  return body;
+}
 async function uploadPlan(file) {
   const bust = (items, level = 'error') => editor.setBanner({ level, items });
   try {
@@ -345,6 +353,7 @@ async function uploadPlan(file) {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `server returned ${res.status}`);
     const { floorplan: fp, underlay, warnings, quality } = draftToFloorplan(body, { imgW: pick.width, imgH: pick.height, name: file.name.replace(/\.[^.]+$/, ''), widthHintM: pick.widthHintM });
+    lastDraft = { image: pick.image, raw: body };
     editor.loadDraft(fp, { ...underlay, href: pick.image }, warnings, quality);
   } catch (err) {
     const noServer = /Failed to fetch|NetworkError|returned 50[24]/.test(err.message);
@@ -360,6 +369,7 @@ const editor = createEditor({
     refresh();
   },
   onUploadImage: uploadPlan,
+  onReviewDraft: reviewDraft,
   onChange: (fp, { refit, scaleFactor, draft } = {}) => {
     floorplan = fp;
     if (draft) {
