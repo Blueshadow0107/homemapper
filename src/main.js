@@ -259,7 +259,8 @@ function cfdReadout(info) {
   if (!info) return;
   $('#cfd-time-label').textContent = `${Math.round(info.time_s / 60)} min`;
   $('#cfd-height-label').textContent = `${info.height_m.toFixed(1)} m`;
-  $('#cfd-readout').textContent = `Slice ${info.tMin.toFixed(1)}–${info.tMax.toFixed(1)} °C · peak air speed ${info.vMax.toFixed(2)} m/s`;
+  // qualitative view (user choice B): relative warmth and air speed only, never absolute temperatures
+  $('#cfd-readout').textContent = `Peak air speed on this slice ${info.vMax.toFixed(3)} m/s · colours show relative warmth, not absolute temperature`;
 }
 function cfdStop(msg) {
   $('#cfd-run').hidden = false;
