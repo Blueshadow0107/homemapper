@@ -1,4 +1,4 @@
-# Home Comfort Twin
+# HomeMapper
 
 **For planners and designers in the earliest stages of house design**, before anything is built: compare router placement and heating options on a floorplan and see how the choices behave. It is a comparison tool for early decisions, not a substitute for a survey or a certified energy calculation.
 
@@ -64,7 +64,7 @@ With `npm run dev` on port 5174 (or `APP=...`) and, for the upload shot, the dra
 
 ```sh
 node video/capture.mjs      # headless Brave/Chromium drives the app, writes one clip per scene to video/out/
-node video/assemble.mjs     # open-captioned, voiceless MP4 -> video/out/home-comfort-twin-demo.mp4 (under 90 s)
+node video/assemble.mjs     # open-captioned, voiceless MP4 -> video/out/homemapper-demo.mp4 (under 90 s)
 ```
 
 Needs ffmpeg and a Chromium-based browser named `brave-browser` on PATH. The upload shot uses the generated synthetic plan, never a real one.

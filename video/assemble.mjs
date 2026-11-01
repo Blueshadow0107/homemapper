@@ -1,4 +1,4 @@
-// Assemble the captioned, voiceless demo from capture.mjs clips -> video/out/home-comfort-twin-demo.mp4 (git-ignored).
+// Assemble the captioned, voiceless demo from capture.mjs clips -> video/out/homemapper-demo.mp4 (git-ignored).
 // Timeline follows docs/demo-video.md; each clip is sped up (max 1.6x) or freeze-padded to its slot. Open captions are burned in.
 //   node video/assemble.mjs        (run `node video/capture.mjs` first)
 import { execFileSync } from 'node:child_process';
@@ -35,6 +35,6 @@ for (const [i, r] of rows.entries()) {
   console.log(`${r.clip}: ${d.toFixed(1)} s -> slot ${r.slot} s (x${speed.toFixed(2)}${pad > 0.05 ? `, +${pad.toFixed(1)} s freeze` : ''})`);
 }
 writeFileSync(path.join(OUT, 'concat.txt'), parts.map((p) => `file '${p}'`).join('\n'));
-const final = path.join(OUT, 'home-comfort-twin-demo.mp4');
+const final = path.join(OUT, 'homemapper-demo.mp4');
 execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', path.join(OUT, 'concat.txt'), '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=stereo', '-shortest', '-c:v', 'libx264', '-crf', '18', '-preset', 'medium', '-c:a', 'aac', '-b:a', '64k', '-movflags', '+faststart', final]);
 console.log(`final: ${final} ${dur(final).toFixed(2)} s`);

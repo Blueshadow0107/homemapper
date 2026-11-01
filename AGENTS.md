@@ -1,4 +1,4 @@
-# home-comfort-twin
+# HomeMapper
 
 ## Product scope
 

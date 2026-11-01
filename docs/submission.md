@@ -6,7 +6,7 @@
 
 ## One-liner
 
-Home Comfort Twin lets planners and designers compare router placement and heating on a floorplan in the earliest stages of house design, before anything is built.
+HomeMapper lets planners and designers compare router placement and heating on a floorplan in the earliest stages of house design, before anything is built.
 
 ## Short description
 

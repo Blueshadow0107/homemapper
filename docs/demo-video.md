@@ -14,7 +14,7 @@ Show one practical journey: review a floorplan in 2D, inspect it in 3D, then use
 | 0:31–0:48 | In **Wi-Fi**, click **Place router** and show the estimated field. Briefly show **Add a reading**. Keep the **Estimated** pill visible. | “I can try router positions and see estimated Wi-Fi coverage change with distance and walls. It is not a survey; real spot readings are kept separate.” |
 | 0:48–1:04 | In **Heating**, click **Add radiator**, run/scrub the timeline, and show room temperatures. Keep **Quantitative estimate** visible. | “Heating gives an approximate room-temperature estimate over time under the selected scenario assumptions.” |
 | 1:04–1:14 | Briefly show **Airflow**, its **Qualitative** pill, and the caveat. | “Airflow shows relative circulation and warmth qualitatively. Heating is the only view with quantitative temperature estimates.” |
-| 1:14–1:24 | Show Codex contribution note, then end on the full 3D view and project name. | “Codex helped us test real floorplan drafts and catch misleading AI location hints. We kept text suggestions and left geometry for people to verify. That’s Home Comfort Twin.” |
+| 1:14–1:24 | Show Codex contribution note, then end on the full 3D view and project name. | “Codex helped us test real floorplan drafts and catch misleading AI location hints. We kept text suggestions and left geometry for people to verify. That’s HomeMapper.” |
 
 ## Recording notes
 

@@ -11,7 +11,7 @@ const wall = (x1, z1, x2, z2, t = 5) => `<line x1="${X0 + px(x1)}" y1="${Y0 + px
 const label = (x, z, t, sub) => `<text x="${X0 + px(x)}" y="${Y0 + px(z)}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="20" fill="#333">${t}</text><text x="${X0 + px(x)}" y="${Y0 + px(z) + 22}" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#777">${sub}</text>`;
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="820" viewBox="0 0 1100 820"><rect width="1100" height="820" fill="#fff"/>
 <text x="90" y="60" font-family="Helvetica,Arial,sans-serif" font-size="22" fill="#222" font-weight="bold">SYNTHETIC DEMO PLAN</text>
-<text x="90" y="86" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#777">generated for the Home Comfort Twin demo, not a real building</text>
+<text x="90" y="86" font-family="Helvetica,Arial,sans-serif" font-size="14" fill="#777">generated for the HomeMapper demo, not a real building</text>
 ${wall(0, 0, W, 0, 9)}${wall(W, 0, W, D, 9)}${wall(W, D, 0, D, 9)}${wall(0, D, 0, 0, 9)}
 ${wall(0, 4, W, 4)}${wall(6, 0, 6, D)}
 ${label(3, 2, 'BEDROOM', '6.0 x 4.0 m')}${label(8.6, 2, 'STUDY', '5.2 x 4.0 m')}

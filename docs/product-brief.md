@@ -2,7 +2,7 @@
 
 ## Working description
 
-Home Comfort Twin turns a floorplan into an editable 3D shell, then lets you reason about it: an **estimated** Wi-Fi field from one router, a **quantitative** room-by-room heating estimate, and a **qualitative** airflow view. People can optionally take Wi-Fi spot readings to compare the estimate with reality.
+HomeMapper turns a floorplan into an editable 3D shell, then lets you reason about it: an **estimated** Wi-Fi field from one router, a **quantitative** room-by-room heating estimate, and a **qualitative** airflow view. People can optionally take Wi-Fi spot readings to compare the estimate with reality.
 
 ## First audience and problem
 
