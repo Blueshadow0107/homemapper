@@ -80,3 +80,13 @@ const hedgeCover = draftToFloorplan({ ...sparseRaw(), notes: 'Limited details an
 assert.equal(hedgeCover.quality, 'poor');
 function sparseRaw() { return { rooms: [{ name: 'A', polygon: sq2(100, 100, 300, 300) }, { name: 'B', polygon: sq2(700, 700, 900, 900) }], walls: [W2(100, 100, 300, 100, true), W2(300, 100, 300, 300, true), W2(300, 300, 100, 300, true), W2(100, 300, 100, 100, true), W2(700, 700, 900, 700, true), W2(900, 700, 900, 900, true), W2(900, 900, 700, 900, true), W2(700, 900, 700, 700, true)], printed_overall_width_m: null, plan_count: 1, omitted_or_uncertain: [] }; }
 console.log('draft hedging: passed');
+
+// ---- rectangle-first extraction: box wins over polygon; skewed quads are straightened
+{
+  const raw = { rooms: [{ name: 'K', rectangular: true, box: { x0: 100, y0: 100, x1: 500, y1: 500 }, polygon: [] }, { name: 'S', rectangular: false, box: { x0: 500, y0: 100, x1: 900, y1: 500 }, polygon: [{ x: 500, y: 100 }, { x: 900, y: 120 }, { x: 880, y: 500 }, { x: 510, y: 480 }] }], walls: [], printed_overall_width_m: null, plan_count: 1, omitted_or_uncertain: [], notes: '' };
+  const d = draftToFloorplan(raw, { imgW: 800, imgH: 800 });
+  const axisAligned = (r) => r.polygon.length === 4 && r.polygon[0][1] === r.polygon[1][1] && r.polygon[1][0] === r.polygon[2][0];
+  assert.ok(d.floorplan.rooms.every(axisAligned), 'rooms are axis-aligned rectangles');
+  assert.ok(d.warnings.some((w) => /Straightened 1/.test(w)));
+  console.log('rect-first: passed');
+}

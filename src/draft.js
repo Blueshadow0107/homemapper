@@ -27,7 +27,20 @@ export function draftToFloorplan(raw, { imgW, imgH, name = 'Uploaded plan', widt
   const warnings = [];
   const num = (v) => (Number.isFinite(v) ? v : null);
   const P = (p) => (num(p?.x) !== null && num(p?.y) !== null ? [Math.min(1000, Math.max(0, p.x)), Math.min(1000, Math.max(0, p.y))] : null);
-  const rooms0 = (raw.rooms ?? []).map((r) => ({ name: String(r.name ?? 'Room').slice(0, 40), pts: (r.polygon ?? []).map(P).filter(Boolean) })).filter((r) => r.pts.length >= 3);
+  const rectOf = (pts) => { const xs = pts.map((p) => p[0]); const ys = pts.map((p) => p[1]); return [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)], [Math.min(...xs), Math.max(...ys)]]; };
+  const polyArea = (pts) => Math.abs(pts.reduce((a, p, j) => { const q = pts[(j + 1) % pts.length]; return a + (p[0] * q[1] - q[0] * p[1]); }, 0) / 2);
+  let rectified = 0;
+  const rooms0 = (raw.rooms ?? []).map((r) => {
+    let pts = (r.polygon ?? []).map(P).filter(Boolean);
+    const bx = r.box && [r.box.x0, r.box.y0, r.box.x1, r.box.y1].every(Number.isFinite) ? [P({ x: r.box.x0, y: r.box.y0 }), P({ x: r.box.x1, y: r.box.y1 })] : null;
+    if (r.rectangular && bx && bx[1][0] > bx[0][0] && bx[1][1] > bx[0][1]) pts = rectOf(bx); // rectangle straight from the box: no corner can come out skewed
+    else if (pts.length >= 3 && pts.length <= 5) { // a near-rectangle drawn with skewed corners -> straighten it
+      const rc = rectOf(pts);
+      if (polyArea(pts) / Math.max(1e-9, polyArea(rc)) > 0.65 && polyArea(pts) / Math.max(1e-9, polyArea(rc)) < 0.999) { pts = rc; rectified++; }
+    }
+    return { name: String(r.name ?? 'Room').slice(0, 40), pts };
+  }).filter((r) => r.pts.length >= 3);
+  if (rectified) warnings.push(`Straightened ${rectified} room outline(s) that came back slanted.`);
   const walls0 = (raw.walls ?? []).map((w) => ({ a: P(w.a), b: P(w.b), ext: Boolean(w.exterior) })).filter((w) => w.a && w.b);
   if (!rooms0.length) throw new Error('No rooms found in the image — try a clearer plan or draw it in the editor.');
 

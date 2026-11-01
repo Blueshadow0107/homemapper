@@ -19,7 +19,7 @@ export const SCHEMA = {
   properties: {
     rooms: {
       type: 'array',
-      items: { type: 'object', additionalProperties: false, required: ['name', 'polygon'], properties: { name: { type: 'string' }, polygon: { type: 'array', items: pt } } },
+      items: { type: 'object', additionalProperties: false, required: ['name', 'rectangular', 'box', 'polygon'], properties: { name: { type: 'string' }, rectangular: { type: 'boolean' }, box: { type: 'object', additionalProperties: false, required: ['x0', 'y0', 'x1', 'y1'], properties: { x0: { type: 'number' }, y0: { type: 'number' }, x1: { type: 'number' }, y1: { type: 'number' } } }, polygon: { type: 'array', items: pt } } },
     },
     walls: {
       type: 'array',
@@ -35,7 +35,7 @@ export const SCHEMA = {
 const PROMPT = `You are reading an architectural floorplan image of ONE storey. Extract geometry only.
 Coordinates: normalized 0-1000 on BOTH axes relative to the image (x=0 left, x=1000 right, y=0 top, y=1000 bottom).
 - plan_count: how many separate floorplans (including alternative layouts or other storeys) appear in the image. If more than 1, extract ONLY the largest / most complete one, and say which in notes. Ignore elevations, sections, title blocks, legends and text.
-- rooms: EVERY enclosed room, including bathrooms, toilets, closets, laundry, store rooms and circulation spaces: do not skip small ones and do not merge neighbours that have their own walls. Name from its printed label (or "Room N"). Polygon corners in order; rectilinear plans: 4+ corners. An open-plan zone without walls between its parts is one room.
+- rooms: EVERY enclosed room, including bathrooms, toilets, closets, laundry, store rooms and circulation spaces: do not skip small ones and do not merge neighbours that have their own walls. Name from its printed label (or "Room N"). Most rooms are rectangles: set rectangular=true and give the AXIS-ALIGNED box (x0<x1, y0<y1) hugging the room's inner walls, and leave polygon empty. Only for L-shaped or otherwise non-rectangular rooms set rectangular=false, give the box of its extent and the polygon corners in order. Neighbouring rooms must share the exact same edge coordinate (e.g. one room's x1 equals the next room's x0). Never output slanted edges unless the wall is really diagonal. An open-plan zone without walls between its parts is one room.
 - walls: straight wall centre-line segments. Shared corners must use IDENTICAL coordinates. Mark exterior=true for the outer envelope. Do not draw doors/windows as walls; skip furniture, text and dimension lines. Every room edge should be covered by a wall segment.
 - printed_overall_width_m: the overall building width in METRES only if a dimension for it is printed (convert feet-inches: 1 ft = 0.3048 m, 1 in = 0.0254 m); otherwise null. Never guess.
 - omitted_or_uncertain: short strings naming anything you left out, merged, or are unsure of (e.g. "small washroom bottom-right not extracted", "balcony outline unclear"). Empty list only if you are confident the extraction is complete.
@@ -47,10 +47,10 @@ function cannedDraft() {
   const W = (ax, ay, bx, by, exterior) => ({ a: { x: ax, y: ay }, b: { x: bx, y: by }, exterior });
   return {
     rooms: [
-      { name: 'Living room', polygon: sq(100, 100, 600, 500) },
-      { name: 'Kitchen', polygon: sq(600, 100, 900, 500) },
-      { name: 'Bedroom', polygon: sq(100, 500, 500, 900) },
-      { name: 'Bathroom', polygon: sq(500, 500, 900, 900) },
+      { name: 'Living room', rectangular: false, box: { x0: 100, y0: 100, x1: 600, y1: 500 }, polygon: sq(100, 100, 600, 500) },
+      { name: 'Kitchen', rectangular: true, box: { x0: 600, y0: 100, x1: 900, y1: 500 }, polygon: [] },
+      { name: 'Bedroom', rectangular: false, box: { x0: 100, y0: 500, x1: 500, y1: 900 }, polygon: sq(100, 500, 500, 900) },
+      { name: 'Bathroom', rectangular: false, box: { x0: 500, y0: 500, x1: 900, y1: 900 }, polygon: sq(500, 500, 900, 900) },
     ],
     walls: [W(100, 100, 900, 100, true), W(900, 100, 900, 900, true), W(900, 900, 100, 900, true), W(100, 900, 100, 100, true), W(100, 500, 900, 500, false), W(600, 100, 600, 500, false), W(500, 500, 500, 900, false)],
     printed_overall_width_m: null,
