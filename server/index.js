@@ -1,11 +1,11 @@
 // Local proxy: floorplan image -> structured wall/room extraction via OpenAI vision.
 // The key lives ONLY in the environment (OPENAI_API_KEY). It is never logged, returned, or written to disk.
 //   OPENAI_API_KEY=... node server/index.js        (real)      DRAFT_MOCK=1 node server/index.js   (no key, canned result)
-// Env: OPENAI_MODEL (default gpt-4o), PORT (default 5176).
+// Env: OPENAI_MODEL (default gpt-5.5), PORT (default 5176).
 import http from 'node:http';
 
 const PORT = Number(process.env.PORT || 5176);
-const MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
+const MODEL = process.env.OPENAI_MODEL || 'gpt-5.5';
 const MOCK = process.env.DRAFT_MOCK === '1' || process.env.DRAFT_MOCK === 'weak'; // 'weak' = canned draft that scores poor, for UI tests
 const MODEL_OK = /^(gpt-[a-z0-9.\-]{1,40}|o\d[a-z0-9.\-]{0,20})$/; // optional per-request model override (loopback only)
 const MAX_BODY = 9 * 1024 * 1024;

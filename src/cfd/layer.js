@@ -17,6 +17,7 @@ export function createCfdLayer(viewer) {
   let showArrows = true;
   let slice = null;
   let arrows = null;
+  let runMax = 0; // peak speed seen so far this run (reset on clear)
   const cone = new THREE.ConeGeometry(0.05, 1, 8);
   cone.translate(0, 0.5, 0); // base at origin, tip along +Y
   cone.rotateX(Math.PI / 2); // tip along +Z... re-aimed per instance below via lookAt-style quaternion
@@ -35,6 +36,7 @@ export function createCfdLayer(viewer) {
 
   function setGrid(g) {
     grid = g;
+    runMax = 0;
     frames = [];
     frameIdx = 0;
     clear();
@@ -97,8 +99,12 @@ export function createCfdLayer(viewer) {
         vMax = Math.max(vMax, s);
         pts.push({ ix, iz, v, s });
       }
+    // display-only normalisation (Kimi 16:16): the radiator plume is weak in physical units, so scale arrows so the run's peak shows as 0.15
+    runMax = Math.max(runMax, vMax);
+    const k = 0.15 / Math.max(runMax, 1e-6);
+    for (const p of pts) p.d = p.s * k;
     if (showArrows) {
-      const live = pts.filter((p) => p.s > 0.01);
+      const live = pts.filter((p) => p.d > 0.01);
       arrows = new THREE.InstancedMesh(cone, new THREE.MeshBasicMaterial({ color: '#ffffff', depthTest: false, transparent: true, opacity: 0.95 }), Math.max(1, live.length));
       arrows.renderOrder = 6;
       const m = new THREE.Matrix4();
@@ -107,14 +113,14 @@ export function createCfdLayer(viewer) {
       live.forEach((p, i) => {
         const dir = new THREE.Vector3(...p.v).normalize();
         q.setFromUnitVectors(up, dir);
-        const len = Math.max(0.12, Math.min(1, p.s / Math.max(vMax, 0.3)) * cell_m * stride * 1.4);
+        const len = Math.max(0.12, Math.min(1, p.d / 0.3) * cell_m * stride * 1.4);
         m.compose(
           new THREE.Vector3(origin_m[0] + (p.ix + 0.5) * cell_m, y, -(origin_m[1] + (p.iz + 0.5) * cell_m)),
           q,
           new THREE.Vector3(1, 1, len),
         );
         arrows.setMatrixAt(i, m);
-        arrows.setColorAt(i, col.setHSL(0.72 - 0.72 * Math.min(1, p.s / 0.4), 0.9, 0.45)); // slow = violet, fast = red
+        arrows.setColorAt(i, col.setHSL(0.72 - 0.72 * Math.min(1, p.d / 0.15), 0.9, 0.45)); // slow = violet, fast = red
       });
       arrows.count = live.length;
       arrows.instanceMatrix.needsUpdate = true;
@@ -133,7 +139,7 @@ export function createCfdLayer(viewer) {
     setSliceHeight: (h) => ((sliceY = h), draw()),
     setArrows: (on) => ((showArrows = on), draw()),
     redraw: draw,
-    reset: () => ((grid = null), (frames = []), clear()),
+    reset: () => ((grid = null), (runMax = 0), (frames = []), clear()),
     TEMP_RANGE,
   };
 }

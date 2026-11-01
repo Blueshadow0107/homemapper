@@ -360,7 +360,7 @@ async function uploadPlan(file) {
     if (!pick) return;
     if (pick.error) return bust([pick.error]);
     bust(['Reading your plan… (a few seconds)'], 'info');
-    const res = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: pick.image }) });
+    const res = await fetch('/api/draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: pick.image, model: new URLSearchParams(location.search).get('model') || undefined }) }); // ?model=… picks the vision model (server validates)
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `server returned ${res.status}`);
     const { floorplan: fp, underlay, warnings, quality } = draftToFloorplan(body, { imgW: pick.width, imgH: pick.height, name: file.name.replace(/\.[^.]+$/, ''), widthHintM: pick.widthHintM });
