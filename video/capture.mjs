@@ -84,12 +84,24 @@ async function endClip() {
   console.log(`clip ${name}: ${frames.length} frames, ${(+secs).toFixed(1)} s -> ${mp4}`);
   return +secs;
 }
+const PLAN_JSON = path.join(OUT, 'drafted-plan.json'); // the checked AI draft from the upload scene; later scenes reuse it so the whole journey is ONE plan
+async function loadDrafted() {
+  if (!existsSync(PLAN_JSON)) throw new Error('run the upload scene first (writes ' + PLAN_JSON + ')');
+  await load(); await ev("document.querySelector('#tab-plan').click()"); await sleep(400);
+  const doc = (await send('DOM.getDocument')).result.root.nodeId;
+  const node = (await send('DOM.querySelector', { nodeId: doc, selector: 'input[data-kind=json]' })).result.nodeId;
+  await send('DOM.setFileInputFiles', { nodeId: node, files: [PLAN_JSON] }); await sleep(900);
+  const n = await ev('twin.editor.getPlan().rooms.length');
+  const nm = await ev('twin.editor.getPlan().name');
+  if (n !== 4 || nm !== 'synthetic-plan') throw new Error('drafted plan did not load (rooms=' + n + ', name=' + nm + ')');
+  console.log('plan ok: ' + nm + ', ' + n + ' rooms');
+}
 async function load(url = APP) { await send('Page.navigate', { url: 'about:blank' }); await sleep(300); await send('Page.navigate', { url }); await sleep(3200); cur = [W * 0.5, H * 0.5]; }
 
 // ---- scenes (one per row of docs/demo-video.md)
 const scenes = {
   async intro() { // 0:00-0:07 start on 2D plan
-    await load(); await ev("document.querySelector('#tab-plan').click()"); await sleep(600);
+    await loadDrafted(); await sleep(400); // same synthetic plan as every other scene (drafted + checked in the upload scene)
     await startClip('1-intro');
     await moveTo(1100, 400, 900); await sleep(900);
     await moveTo(...await center('[data-act=upload], .ed-bar .primary'), 900); await sleep(1800);
@@ -99,7 +111,8 @@ const scenes = {
   async upload() { // 0:07-0:19 upload + crop + scale; the model wait is cut out
     if (!existsSync(PLAN_IMG)) execFileSync('node', [path.join(HERE, 'make-plan.mjs')]);
     if (!existsSync(PLAN_IMG)) throw new Error('missing ' + PLAN_IMG);
-    await load(); await ev("document.querySelector('#tab-plan').click()"); await sleep(600);
+    if (existsSync(PLAN_JSON)) await loadDrafted(); else { await load(); await ev("document.querySelector('#tab-plan').click()"); } // seeded with the same plan so nothing else shows behind the dialog
+    await sleep(500);
     await startClip('2-upload');
     const doc = (await send('DOM.getDocument')).result.root.nodeId;
     const node = (await send('DOM.querySelector', { nodeId: doc, selector: 'input[data-kind=image]' })).result.nodeId;
@@ -117,10 +130,11 @@ const scenes = {
     resume(); await sleep(2500);
     await moveTo(800, 560, 900); await sleep(1200);
     await clickText('I have checked it', 800); await sleep(1500); // the human review step the app requires
+    if (!existsSync(PLAN_JSON)) writeFileSync(PLAN_JSON, await ev('JSON.stringify(twin.editor.getPlan())')); // first draft is kept so every scene shares one plan
     return endClip();
   },
   async inspect() { // 0:19-0:31 Looks right -> 3D, orbit
-    await load(); await ev("document.querySelector('#tab-plan').click()"); await sleep(600);
+    await loadDrafted(); await sleep(300);
     await startClip('3-inspect');
     await sleep(800);
     await clickSel('[data-act=to3d]', 900); await sleep(1200);
@@ -129,17 +143,17 @@ const scenes = {
     return endClip();
   },
   async wifi() { // 0:31-0:48
-    await load(); await ev("document.querySelector('#walls-toggle').click()"); await ev("document.querySelector('#layer-wifi').click()"); await sleep(600);
+    await loadDrafted(); await ev("document.querySelector('#tab-3d').click()"); await ev("document.querySelector('#walls-toggle').click()"); await ev("document.querySelector('#layer-wifi').click()"); await sleep(600);
     await startClip('4-wifi');
     await sleep(900);
     await clickSel('#router-toggle', 800); await sleep(300);
-    let [x, y] = await proj(7, 5); await clickAt(x, y, 900); await sleep(1800);
-    await clickSel('#mark-toggle', 700); [x, y] = await proj(2, 2); await clickAt(x, y, 800); await sleep(1500);
+    let [x, y] = await proj(8.6, 6); await clickAt(x, y, 900); await sleep(1800);
+    await clickSel('#mark-toggle', 700); [x, y] = await proj(2.5, 2.2); await clickAt(x, y, 800); await sleep(1500);
     await moveTo(...await center('.pill-claim'), 700); await sleep(1500);
     return endClip();
   },
   async heat() { // 0:48-1:04
-    await load(); await ev("document.querySelector('#walls-toggle').click()"); await ev("document.querySelector('#layer-heat').click()"); await sleep(600);
+    await loadDrafted(); await ev("document.querySelector('#tab-3d').click()"); await ev("document.querySelector('#walls-toggle').click()"); await ev("document.querySelector('#layer-heat').click()"); await sleep(600);
     await startClip('5-heat');
     await sleep(700);
     await clickSel('#heater-toggle', 800); const [x, y] = await proj(3, 0.5); await clickAt(x, y, 900); await sleep(1500);
@@ -148,7 +162,7 @@ const scenes = {
     return endClip();
   },
   async air() { // 1:04-1:14 real solver, wait cut
-    await load(); await ev("document.querySelector('#walls-toggle').click()"); await ev("document.querySelector('#layer-heat').click()"); await sleep(400);
+    await loadDrafted(); await ev("document.querySelector('#tab-3d').click()"); await ev("document.querySelector('#walls-toggle').click()"); await ev("document.querySelector('#layer-heat').click()"); await sleep(400);
     await ev("document.querySelector('#heater-toggle').click()"); const [x, y] = await proj(3, 0.5); await clickAt(x, y, 300); await sleep(400);
     await ev("document.querySelector('#layer-cfd').click()"); await sleep(500);
     await startClip('6-air');
@@ -161,7 +175,7 @@ const scenes = {
     return endClip();
   },
   async outro() { // 1:14-1:24 end on an interior view: cutaway walls, slow orbit, Wi-Fi field visible
-    await load(); await ev("document.querySelector('#layer-wifi').click()"); await sleep(400);
+    await loadDrafted(); await ev("document.querySelector('#tab-3d').click()"); await ev("document.querySelector('#layer-wifi').click()"); await sleep(400);
     await clickSel('#walls-toggle', 600); await sleep(500);
     await startClip('7-outro');
     await sleep(800);

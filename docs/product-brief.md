@@ -6,7 +6,7 @@ Home Comfort Twin turns a floorplan into an editable 3D shell, then lets you rea
 
 ## First audience and problem
 
-Someone setting up Wi-Fi or heating in a home or venue who wants to reason about router and radiator placement before moving equipment repeatedly. The hackathon demo uses a schematic plan; this is a prototype for comparative planning, not a site survey or an energy audit.
+Planners and designers in the earliest stages of house design, comparing heating and router placement before construction so options can be reasoned about before they are expensive to change. The hackathon demo uses a schematic and a synthetic plan; this is a prototype for comparative planning, not a site survey or an energy audit.
 
 ## Core journey
 
@@ -54,8 +54,8 @@ If an image has no printed overall width, the user can type the real width in th
 ### Later work
 
 - Calibration of the airflow solver (so it could be compared with Heating) and richer building inputs.
-- A door/window tool in the editor (the models read `openings`, the editor cannot draw them yet).
-- Multi-storey buildings, CAD/DXF import, calibrated or survey-grade predictions.
+- Windows and doors placed in the editor, multiple floors, and furniture that interacts with heat and airflow (beyond blocking air and acting as radiators).
+- CAD/DXF import, calibrated or survey-grade predictions.
 
 ## Demo story
 
