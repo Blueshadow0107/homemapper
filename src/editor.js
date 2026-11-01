@@ -1,4 +1,5 @@
 import * as ops from './plan-ops.js';
+import { normalizePlan } from './plan-schema.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const el = (tag, attrs = {}, parent) => {
@@ -179,7 +180,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     } else if (sel?.kind === 'room' && fp.rooms[sel.i]) {
       html += `<div class="ed-card"><b>Room</b><label>Name <input data-f="name" value="${esc(fp.rooms[sel.i].name)}" /></label></div>`;
     } else {
-      html += `<div class="ed-card"><b>Plan</b><label>Ceiling height (m) <input data-f="ceiling" type="number" step="0.1" min="2" max="6" value="${fp.ceiling_height_m ?? 2.7}" /></label></div>`;
+      html += `<div class="ed-card"><b>Plan</b><label>Ceiling height (m) <input data-f="ceiling" type="number" step="0.1" min="2" max="6" value="${Number.isFinite(+fp.ceiling_height_m) ? +fp.ceiling_height_m : 2.7}" /></label></div>`;
     }
     html += `<div class="ed-issues">${issues.length ? issues.map((i) => `<div class="ed-issue ${i.level}">⚠ ${esc(i.msg)}</div>`).join('') : '<div class="ed-ok">✓ plan looks consistent</div>'}</div>`;
     side.innerHTML = html;
@@ -236,8 +237,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
     fileInput.value = '';
     if (!file) return;
     try {
-      const next = JSON.parse(await file.text());
-      if (!Array.isArray(next.rooms) || !Array.isArray(next.walls)) throw new Error('needs rooms[] and walls[]');
+      const next = normalizePlan(JSON.parse(await file.text())); // whitelist + coerce: never trust imported JSON
       history.push(fp);
       fp = next;
       sel = null;
@@ -260,7 +260,7 @@ export function createEditor({ root, plan, onChange, getRouter, onRouterMove, on
   /** Land an AI draft: becomes the current plan (undoable), shown over its source image, with a to-check list. */
   function loadDraft(next, under, warnings) {
     history.push(fp);
-    fp = next;
+    fp = normalizePlan(next);
     sel = null;
     underlay = under;
     banner = { level: 'warn', items: ['AI DRAFT — not verified.', ...warnings] };
